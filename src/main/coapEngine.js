@@ -22,7 +22,11 @@ function configureOptions(req, headers) {
   headers.forEach(({ key, value }) => {
     if (!key || !value) return
     try {
-      req.setOption(key, value)
+      let val = value
+      if (/^\d+$/.test(value)) {
+        val = parseInt(value, 10)
+      }
+      req.setOption(key, val)
     } catch (e) {
       console.error(`Failed to set CoAP option ${key}:`, e.message)
     }

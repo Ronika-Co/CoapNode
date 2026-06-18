@@ -90,6 +90,31 @@ export default function App() {
   const [observeLogs, setObserveLogs] = useState([])
   const [errorText, setErrorText] = useState('')
 
+  // Resizable layout states
+  const [sidebarWidth, setSidebarWidth] = useState(320)
+  const [requestHeight, setRequestHeight] = useState(400)
+  const [isResizingSidebar, setIsResizingSidebar] = useState(false)
+  const [isResizingRequest, setIsResizingRequest] = useState(false)
+
+  // Gutters refs for script scroll sync
+  const preScriptGutterRef = React.useRef(null)
+  const preScriptTextareaRef = React.useRef(null)
+  const postScriptGutterRef = React.useRef(null)
+  const postScriptTextareaRef = React.useRef(null)
+
+  // Variables Autocomplete state
+  const [suggestion, setSuggestion] = useState({
+    show: false,
+    list: [],
+    x: 0,
+    y: 0,
+    targetInput: null,
+    cursorPosition: 0,
+    braceIndex: -1,
+    query: '',
+    activeIndex: 0
+  })
+
   // Load configuration on mount
   useEffect(() => {
     window.api.storage.loadConfig().then((config) => {
@@ -123,6 +148,48 @@ export default function App() {
     }
   }, [activeRequestId, workspaceData])
 
+  // Mouse drag listeners for resizers
+  const startResizeSidebar = (e) => {
+    e.preventDefault()
+    setIsResizingSidebar(true)
+  }
+
+  const startResizeRequest = (e) => {
+    e.preventDefault()
+    setIsResizingRequest(true)
+  }
+
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (isResizingSidebar) {
+        const newWidth = Math.max(200, Math.min(e.clientX, 600))
+        setSidebarWidth(newWidth)
+      } else if (isResizingRequest) {
+        const mainElement = document.getElementById('main-panel-container')
+        if (mainElement) {
+          const rect = mainElement.getBoundingClientRect()
+          const newHeight = Math.max(150, Math.min(e.clientY - rect.top, rect.height - 150))
+          setRequestHeight(newHeight)
+        }
+      }
+    }
+
+    const handleMouseUp = () => {
+      setIsResizingSidebar(false)
+      setIsResizingRequest(false)
+    }
+
+    if (isResizingSidebar || isResizingRequest) {
+      window.addEventListener('mousemove', handleMouseMove)
+      window.addEventListener('mouseup', handleMouseUp)
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [isResizingSidebar, isResizingRequest])
+
   // Get current active environment variables
   const getActiveEnvironment = () => {
     if (!workspaceData || !workspaceData.activeEnvironmentId) return null
@@ -141,8 +208,164 @@ export default function App() {
     })
   }
 
+  const isValidJson = (str) => {
+    try {
+      JSON.parse(str)
+      return true
+    } catch (e) {
+      return false
+    }
+  }
+
+  const safeEncode = (str) => {
+    if (typeof str !== 'string') return ''
+    let encoded = encodeURIComponent(str)
+    encoded = encoded.replace(/%7B%7B/g, '{{').replace(/%7D%7D/g, '}}')
+    return encoded
+  }
+
+  const safeDecode = (str) => {
+    if (typeof str !== 'string') return ''
+    let prepared = str.replace(/%7B%7B/gi, '{{').replace(/%7D%7D/gi, '}}')
+    try {
+      return decodeURIComponent(prepared)
+    } catch (e) {
+      return prepared
+    }
+  }
+
+  const parseQueryParamsFromUrl = (urlString) => {
+    try {
+      const qIndex = urlString.indexOf('?')
+      if (qIndex === -1) return []
+      const queryString = urlString.substring(qIndex + 1)
+      if (!queryString) return []
+      return queryString.split('&').map(pair => {
+        const [key, ...valParts] = pair.split('=')
+        return {
+          key: safeDecode(key || ''),
+          value: safeDecode(valParts.join('=') || '')
+        }
+      }).filter(p => p.key !== '')
+    } catch (e) {
+      console.error(e)
+      return []
+    }
+  }
+
+  const buildUrlWithParams = (baseUrl, params) => {
+    const qIndex = baseUrl.indexOf('?')
+    const base = qIndex === -1 ? baseUrl : baseUrl.substring(0, qIndex)
+    const activeParams = (params || []).filter(p => p.key.trim() !== '')
+    if (activeParams.length === 0) return base
+    const queryString = activeParams.map(p => `${safeEncode(p.key)}=${safeEncode(p.value)}`).join('&')
+    return `${base}?${queryString}`
+  }
+
+  // Check input autocomplete triggers when typing {{
+  const checkAutocompleteTrigger = (e, val) => {
+    const cursor = e.target.selectionStart
+    const textBeforeCursor = val.substring(0, cursor)
+    const lastBraces = textBeforeCursor.lastIndexOf('{{')
+    if (lastBraces !== -1 && lastBraces > textBeforeCursor.lastIndexOf('}}')) {
+      const varQuery = textBeforeCursor.substring(lastBraces + 2).trim()
+      const activeEnv = getActiveEnvironment()
+      const allVars = activeEnv ? (activeEnv.variables || []) : []
+      const filtered = allVars.filter(v => v.key.toLowerCase().includes(varQuery.toLowerCase()))
+      
+      const rect = e.target.getBoundingClientRect()
+      
+      setSuggestion({
+        show: true,
+        list: filtered,
+        x: rect.left + window.scrollX,
+        y: rect.bottom + window.scrollY + 4,
+        targetInput: e.target,
+        cursorPosition: cursor,
+        braceIndex: lastBraces,
+        query: varQuery,
+        activeIndex: 0
+      })
+    } else {
+      setSuggestion(prev => ({ ...prev, show: false }))
+    }
+  }
+
+  const handleInputKeyDown = (e) => {
+    if (!suggestion.show || suggestion.list.length === 0) return
+    
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setSuggestion(prev => ({
+        ...prev,
+        activeIndex: (prev.activeIndex + 1) % prev.list.length
+      }))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setSuggestion(prev => ({
+        ...prev,
+        activeIndex: (prev.activeIndex - 1 + prev.list.length) % prev.list.length
+      }))
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      insertSelectedSuggestion(suggestion.list[suggestion.activeIndex])
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      setSuggestion(prev => ({ ...prev, show: false }))
+    }
+  }
+
+  const insertSelectedSuggestion = (variable) => {
+    if (!suggestion.targetInput || !variable) return
+    const input = suggestion.targetInput
+    const val = input.value
+    const braceIndex = suggestion.braceIndex
+    const cursor = suggestion.cursorPosition
+    
+    const before = val.substring(0, braceIndex)
+    const after = val.substring(cursor)
+    const inserted = `{{${variable.key}}}`
+    const newValue = before + inserted + after
+    
+    const fieldType = input.getAttribute('data-field-type')
+    const rowIndex = parseInt(input.getAttribute('data-row-index') || '-1')
+    const fieldKey = input.getAttribute('data-field-key')
+    
+    if (fieldType === 'url') {
+      handleUpdateReqField('url', newValue)
+    } else if (fieldType === 'payload') {
+      handleUpdateReqField('payload', newValue)
+    } else if (fieldType === 'queryParams' || fieldType === 'headers') {
+      const list = [...(activeReqConfig[fieldType] || [])]
+      if (list[rowIndex]) {
+        list[rowIndex][fieldKey] = newValue
+        handleUpdateReqField(fieldType, list)
+      }
+    }
+    
+    setTimeout(() => {
+      input.focus()
+      const newCursorPos = braceIndex + inserted.length
+      input.setSelectionRange(newCursorPos, newCursorPos)
+    }, 10)
+    
+    setSuggestion({ show: false, list: [], x: 0, y: 0, targetInput: null, cursorPosition: 0, activeIndex: 0 })
+  }
+
   // Interpolate full request config before send
   const interpolateRequestConfig = (config) => {
+    let headers = (config.headers || []).map(h => ({
+      key: resolveVariables(h.key),
+      value: resolveVariables(h.value)
+    }))
+
+    if (config.payloadType === 'json') {
+      const hasContentFormat = headers.some(h => h.key.toLowerCase() === 'content-format')
+      if (!hasContentFormat) {
+        headers.push({ key: 'Content-Format', value: '50' })
+      }
+    }
+
     return {
       ...config,
       url: resolveVariables(config.url),
@@ -150,10 +373,7 @@ export default function App() {
         key: resolveVariables(p.key),
         value: resolveVariables(p.value)
       })),
-      headers: (config.headers || []).map(h => ({
-        key: resolveVariables(h.key),
-        value: resolveVariables(h.value)
-      })),
+      headers,
       payload: resolveVariables(config.payload)
     }
   }
@@ -294,6 +514,7 @@ export default function App() {
       queryParams: [],
       headers: [],
       payload: '',
+      payloadType: 'text',
       preScript: '',
       postScript: ''
     }
@@ -414,7 +635,17 @@ export default function App() {
   // Update request input options
   const handleUpdateReqField = (field, value) => {
     if (!activeReqConfig || !workspaceData) return
-    const updatedConfig = { ...activeReqConfig, [field]: value }
+    
+    let updatedConfig = { ...activeReqConfig, [field]: value }
+    
+    if (field === 'queryParams') {
+      const newUrl = buildUrlWithParams(activeReqConfig.url || '', value)
+      updatedConfig.url = newUrl
+    } else if (field === 'url') {
+      const newParams = parseQueryParamsFromUrl(value)
+      updatedConfig.queryParams = newParams
+    }
+    
     setActiveReqConfig(updatedConfig)
 
     // Save tree structure
@@ -565,11 +796,41 @@ export default function App() {
         </div>
       )}
 
+      {/* FLOATING VARIABLE AUTOCOMPLETE SUGGESTIONS */}
+      {suggestion.show && suggestion.list.length > 0 && (
+        <div 
+          style={{ left: suggestion.x, top: suggestion.y }}
+          className="fixed bg-slate-900 border border-white/10 rounded-xl max-h-48 overflow-y-auto shadow-2xl z-[9999] w-64 p-1 flex flex-col gap-0.5 font-mono text-[11px]"
+        >
+          {suggestion.list.map((v, idx) => (
+            <div 
+              key={v.key}
+              onClick={() => insertSelectedSuggestion(v)}
+              className={`p-2 rounded-lg cursor-pointer flex justify-between items-center transition ${
+                suggestion.activeIndex === idx
+                  ? 'bg-indigo-600 text-white'
+                  : 'hover:bg-white/5 text-slate-300'
+              }`}
+            >
+              <span className="font-semibold truncate">{v.key}</span>
+              <span className={`text-[9px] truncate ml-2 max-w-[120px] ${suggestion.activeIndex === idx ? 'text-indigo-200' : 'text-slate-500'}`}>
+                {v.value}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {workspaceData ? (
         // ACTIVE WORKSPACE VIEW
         <>
           {/* LEFT SIDEBAR: explorer */}
-          <aside className="w-80 border-r border-white/5 bg-slate-950/80 flex flex-col justify-between">
+          <aside style={{ width: sidebarWidth }} className="relative border-r border-white/5 bg-slate-950/80 flex flex-col justify-between flex-shrink-0">
+            {/* Vertical Sidebar drag resizer divider */}
+            <div 
+              onMouseDown={startResizeSidebar}
+              className="absolute top-0 right-0 w-[4px] cursor-col-resize h-full hover:bg-indigo-500/50 transition-colors z-20"
+            />
             <div className="flex flex-col h-full overflow-hidden">
               
               {/* Workspace info & close button */}
@@ -831,10 +1092,13 @@ export default function App() {
                     <input
                       type="text"
                       value={activeReqConfig.url}
+                      data-field-type="url"
                       onChange={(e) => {
                         handleUpdateReqField('url', e.target.value)
                         handleInputHover(e, e.target.value)
+                        checkAutocompleteTrigger(e, e.target.value)
                       }}
+                      onKeyDown={handleInputKeyDown}
                       onMouseEnter={(e) => handleInputHover(e, activeReqConfig.url)}
                       onMouseLeave={() => setTooltip({ show: false, text: '', x: 0, y: 0, isError: false })}
                       placeholder="coap://{{host}}:5683/resource"
@@ -895,12 +1159,12 @@ export default function App() {
                   )}
                 </div>
 
-                {/* Main content grid: Request Config (Left) & Response (Right) */}
-                <div className="flex-1 flex overflow-hidden">
+                {/* Main content panel: Stacked Request Config (Top) & Response (Bottom) */}
+                <div id="main-panel-container" className="flex-1 flex flex-col overflow-hidden relative">
                   
-                  {/* Left Config Panel */}
-                  <div className="w-1/2 border-r border-white/5 flex flex-col overflow-hidden">
-                    <div className="flex border-b border-white/5 bg-slate-950/10">
+                  {/* Top Request Config Panel */}
+                  <div style={{ height: requestHeight }} className="flex flex-col overflow-hidden flex-shrink-0 relative border-b border-white/5 bg-slate-900/10">
+                    <div className="flex border-b border-white/5 bg-slate-950/10 flex-shrink-0">
                       {['params', 'options', 'body', 'preScript', 'postScript'].map((tab) => {
                         if (tab === 'body' && ['GET', 'DELETE'].includes(activeReqConfig.method)) return null
                         
@@ -921,7 +1185,7 @@ export default function App() {
                     </div>
 
                     {/* Tab Content Panel */}
-                    <div className="flex-1 p-4 overflow-y-auto bg-slate-900/10">
+                    <div className="flex-grow p-4 overflow-y-auto min-h-0">
                       
                       {/* Params Table */}
                       {requestTab === 'params' && (
@@ -942,10 +1206,15 @@ export default function App() {
                                 <input
                                   type="text"
                                   value={row.key}
+                                  data-field-type="queryParams"
+                                  data-row-index={idx}
+                                  data-field-key="key"
                                   onChange={(e) => {
                                     handleUpdateRow('queryParams', idx, 'key', e.target.value)
                                     handleInputHover(e, e.target.value)
+                                    checkAutocompleteTrigger(e, e.target.value)
                                   }}
+                                  onKeyDown={handleInputKeyDown}
                                   onMouseEnter={(e) => handleInputHover(e, row.key)}
                                   onMouseLeave={() => setTooltip({ show: false, text: '', x: 0, y: 0, isError: false })}
                                   placeholder="Key"
@@ -954,10 +1223,15 @@ export default function App() {
                                 <input
                                   type="text"
                                   value={row.value}
+                                  data-field-type="queryParams"
+                                  data-row-index={idx}
+                                  data-field-key="value"
                                   onChange={(e) => {
                                     handleUpdateRow('queryParams', idx, 'value', e.target.value)
                                     handleInputHover(e, e.target.value)
+                                    checkAutocompleteTrigger(e, e.target.value)
                                   }}
+                                  onKeyDown={handleInputKeyDown}
                                   onMouseEnter={(e) => handleInputHover(e, row.value)}
                                   onMouseLeave={() => setTooltip({ show: false, text: '', x: 0, y: 0, isError: false })}
                                   placeholder="Value"
@@ -999,10 +1273,15 @@ export default function App() {
                                 <input
                                   type="text"
                                   value={row.key}
+                                  data-field-type="headers"
+                                  data-row-index={idx}
+                                  data-field-key="key"
                                   onChange={(e) => {
                                     handleUpdateRow('headers', idx, 'key', e.target.value)
                                     handleInputHover(e, e.target.value)
+                                    checkAutocompleteTrigger(e, e.target.value)
                                   }}
+                                  onKeyDown={handleInputKeyDown}
                                   onMouseEnter={(e) => handleInputHover(e, row.key)}
                                   onMouseLeave={() => setTooltip({ show: false, text: '', x: 0, y: 0, isError: false })}
                                   placeholder="e.g. Content-Format"
@@ -1011,10 +1290,15 @@ export default function App() {
                                 <input
                                   type="text"
                                   value={row.value}
+                                  data-field-type="headers"
+                                  data-row-index={idx}
+                                  data-field-key="value"
                                   onChange={(e) => {
                                     handleUpdateRow('headers', idx, 'value', e.target.value)
                                     handleInputHover(e, e.target.value)
+                                    checkAutocompleteTrigger(e, e.target.value)
                                   }}
+                                  onKeyDown={handleInputKeyDown}
                                   onMouseEnter={(e) => handleInputHover(e, row.value)}
                                   onMouseLeave={() => setTooltip({ show: false, text: '', x: 0, y: 0, isError: false })}
                                   placeholder="e.g. application/json"
@@ -1039,19 +1323,59 @@ export default function App() {
 
                       {/* Body */}
                       {requestTab === 'body' && (
-                        <div className="h-full flex flex-col">
-                          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Request Payload</label>
-                          <textarea
-                            value={activeReqConfig.payload || ''}
-                            onChange={(e) => {
-                              handleUpdateReqField('payload', e.target.value)
-                              handleInputHover(e, e.target.value)
-                            }}
-                            onMouseEnter={(e) => handleInputHover(e, activeReqConfig.payload)}
-                            onMouseLeave={() => setTooltip({ show: false, text: '', x: 0, y: 0, isError: false })}
-                            placeholder="Raw text payload to send (POST/PUT)..."
-                            className="flex-1 min-h-[300px] w-full bg-slate-950 border border-white/10 rounded-lg p-3 text-xs text-slate-200 outline-none focus:border-indigo-500/50 font-mono resize-none"
-                          />
+                        <div className="h-full flex flex-col gap-2">
+                          <div className="flex justify-between items-center flex-shrink-0">
+                            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Request Payload</label>
+                            <div className="flex gap-2 bg-white/5 p-0.5 rounded-lg border border-white/10 text-xs">
+                              <button
+                                onClick={() => handleUpdateReqField('payloadType', 'text')}
+                                className={`px-2.5 py-1 rounded-md transition font-semibold ${
+                                  (activeReqConfig.payloadType || 'text') === 'text'
+                                    ? 'bg-indigo-600 text-white shadow-sm'
+                                    : 'text-slate-400 hover:text-slate-200'
+                                }`}
+                              >
+                                Text
+                              </button>
+                              <button
+                                onClick={() => handleUpdateReqField('payloadType', 'json')}
+                                className={`px-2.5 py-1 rounded-md transition font-semibold ${
+                                  activeReqConfig.payloadType === 'json'
+                                    ? 'bg-indigo-600 text-white shadow-sm'
+                                    : 'text-slate-400 hover:text-slate-200'
+                                }`}
+                              >
+                                JSON
+                              </button>
+                            </div>
+                          </div>
+                          
+                          <div className="flex-1 flex flex-col relative min-h-0">
+                            <textarea
+                              value={activeReqConfig.payload || ''}
+                              data-field-type="payload"
+                              onChange={(e) => {
+                                handleUpdateReqField('payload', e.target.value)
+                                handleInputHover(e, e.target.value)
+                                checkAutocompleteTrigger(e, e.target.value)
+                              }}
+                              onKeyDown={handleInputKeyDown}
+                              onMouseEnter={(e) => handleInputHover(e, activeReqConfig.payload)}
+                              onMouseLeave={() => setTooltip({ show: false, text: '', x: 0, y: 0, isError: false })}
+                              placeholder={activeReqConfig.payloadType === 'json' ? '{\n  "key": "value"\n}' : 'Raw text payload to send (POST/PUT)...'}
+                              className={`flex-grow w-full bg-slate-950 border rounded-lg p-3 text-xs text-slate-200 outline-none font-mono resize-none h-full overflow-y-auto ${
+                                activeReqConfig.payloadType === 'json' && activeReqConfig.payload && !isValidJson(activeReqConfig.payload)
+                                  ? 'border-rose-500/50 focus:border-rose-500'
+                                  : 'border-white/10 focus:border-indigo-500/50'
+                              }`}
+                            />
+                            
+                            {activeReqConfig.payloadType === 'json' && activeReqConfig.payload && !isValidJson(activeReqConfig.payload) && (
+                              <div className="absolute bottom-2 right-2 px-2 py-0.5 bg-rose-950 border border-rose-500/30 text-rose-400 text-[9px] rounded font-mono">
+                                Invalid JSON format
+                              </div>
+                            )}
+                          </div>
                         </div>
                       )}
 
@@ -1063,16 +1387,39 @@ export default function App() {
                             <span className="text-[10px] text-indigo-400 font-bold bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">JavaScript Enabled</span>
                           </div>
                           
-                          <div className="flex flex-col md:flex-row gap-3">
-                            <textarea
-                              value={activeReqConfig.preScript || ''}
-                              onChange={(e) => handleUpdateReqField('preScript', e.target.value)}
-                              placeholder="// Write pre-request script here...&#10;request.payload = 'mutated payload';"
-                              className="flex-1 min-h-[200px] bg-slate-950 border border-white/10 rounded-lg p-3 text-xs text-indigo-200 outline-none focus:border-indigo-500/50 font-mono resize-none"
-                            />
+                          <div className="flex-1 flex flex-col md:flex-row gap-3 overflow-hidden min-h-0">
+                            <div className="flex-1 flex bg-slate-950 border border-white/10 rounded-lg overflow-hidden font-mono text-xs relative h-full">
+                              {/* Gutter scroll synced */}
+                              <div 
+                                ref={preScriptGutterRef}
+                                className="w-10 bg-slate-900/60 border-r border-white/5 py-3 pr-2 text-right text-slate-600 select-none overflow-y-hidden text-[11px]"
+                                style={{ lineHeight: '20px' }}
+                              >
+                                {Array.from({ length: (activeReqConfig.preScript || '').split('\n').length || 1 }).map((_, idx) => (
+                                  <div key={idx} className="h-5">{idx + 1}</div>
+                                ))}
+                              </div>
+                              <textarea
+                                ref={preScriptTextareaRef}
+                                value={activeReqConfig.preScript || ''}
+                                onChange={(e) => {
+                                  handleUpdateReqField('preScript', e.target.value)
+                                  checkAutocompleteTrigger(e, e.target.value)
+                                }}
+                                onKeyDown={handleInputKeyDown}
+                                onScroll={(e) => {
+                                  if (preScriptGutterRef.current) {
+                                    preScriptGutterRef.current.scrollTop = e.target.scrollTop
+                                  }
+                                }}
+                                placeholder="// Write pre-request script here...&#10;request.payload = 'mutated payload';"
+                                className="flex-grow py-3 px-3 bg-transparent outline-none text-indigo-200 resize-none h-full overflow-y-auto leading-5"
+                                style={{ lineHeight: '20px', fontFamily: 'monospace' }}
+                              />
+                            </div>
                             
                             {/* Script Reference Tips Panel */}
-                            <div className="w-full md:w-56 p-3 bg-white/[0.02] border border-white/5 rounded-lg text-[10px] text-slate-400 flex flex-col gap-2 font-sans select-text">
+                            <div className="w-full md:w-56 p-3 bg-white/[0.02] border border-white/5 rounded-lg text-[10px] text-slate-400 flex flex-col gap-2 font-sans select-text overflow-y-auto h-full flex-shrink-0">
                               <span className="font-semibold text-slate-200 text-xs">NodeJS Sandbox API</span>
                               <p>This script runs in a sandboxed NodeJS `vm` context before request transmission.</p>
                               <div className="h-px bg-white/5" />
@@ -1098,16 +1445,39 @@ export default function App() {
                             <span className="text-[10px] text-indigo-400 font-bold bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">JavaScript Enabled</span>
                           </div>
                           
-                          <div className="flex flex-col md:flex-row gap-3">
-                            <textarea
-                              value={activeReqConfig.postScript || ''}
-                              onChange={(e) => handleUpdateReqField('postScript', e.target.value)}
-                              placeholder="// Write post-request script here...&#10;console.log('Status: ' + response.code);"
-                              className="flex-1 min-h-[200px] bg-slate-950 border border-white/10 rounded-lg p-3 text-xs text-indigo-200 outline-none focus:border-indigo-500/50 font-mono resize-none"
-                            />
+                          <div className="flex-1 flex flex-col md:flex-row gap-3 overflow-hidden min-h-0">
+                            <div className="flex-1 flex bg-slate-950 border border-white/10 rounded-lg overflow-hidden font-mono text-xs relative h-full">
+                              {/* Gutter scroll synced */}
+                              <div 
+                                ref={postScriptGutterRef}
+                                className="w-10 bg-slate-900/60 border-r border-white/5 py-3 pr-2 text-right text-slate-600 select-none overflow-y-hidden text-[11px]"
+                                style={{ lineHeight: '20px' }}
+                              >
+                                {Array.from({ length: (activeReqConfig.postScript || '').split('\n').length || 1 }).map((_, idx) => (
+                                  <div key={idx} className="h-5">{idx + 1}</div>
+                                ))}
+                              </div>
+                              <textarea
+                                ref={postScriptTextareaRef}
+                                value={activeReqConfig.postScript || ''}
+                                onChange={(e) => {
+                                  handleUpdateReqField('postScript', e.target.value)
+                                  checkAutocompleteTrigger(e, e.target.value)
+                                }}
+                                onKeyDown={handleInputKeyDown}
+                                onScroll={(e) => {
+                                  if (postScriptGutterRef.current) {
+                                    postScriptGutterRef.current.scrollTop = e.target.scrollTop
+                                  }
+                                }}
+                                placeholder="// Write post-request script here...&#10;console.log('Status: ' + response.code);"
+                                className="flex-grow py-3 px-3 bg-transparent outline-none text-indigo-200 resize-none h-full overflow-y-auto leading-5"
+                                style={{ lineHeight: '20px', fontFamily: 'monospace' }}
+                              />
+                            </div>
                             
                             {/* Script Reference Tips Panel */}
-                            <div className="w-full md:w-56 p-3 bg-white/[0.02] border border-white/5 rounded-lg text-[10px] text-slate-400 flex flex-col gap-2 font-sans select-text">
+                            <div className="w-full md:w-56 p-3 bg-white/[0.02] border border-white/5 rounded-lg text-[10px] text-slate-400 flex flex-col gap-2 font-sans select-text overflow-y-auto h-full flex-shrink-0">
                               <span className="font-semibold text-slate-200 text-xs">NodeJS Sandbox API</span>
                               <p>This script runs in a sandboxed NodeJS `vm` context after response reception.</p>
                               <div className="h-px bg-white/5" />
@@ -1127,9 +1497,15 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Right Response Panel */}
-                  <div className="w-1/2 flex flex-col overflow-hidden">
-                    <div className="flex border-b border-white/5 bg-slate-950/10">
+                  {/* Horizontal Resizer Divider handle */}
+                  <div 
+                    onMouseDown={startResizeRequest}
+                    className="h-[4px] cursor-row-resize bg-white/5 hover:bg-indigo-500/50 transition-colors z-20 flex-shrink-0"
+                  />
+
+                  {/* Bottom Response Panel */}
+                  <div className="flex-grow flex flex-col overflow-hidden bg-slate-950/5 min-h-[150px]">
+                    <div className="flex border-b border-white/5 bg-slate-950/10 flex-shrink-0">
                       <button
                         onClick={() => setResponseTab('body')}
                         className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition ${
@@ -1175,68 +1551,63 @@ export default function App() {
                     </div>
 
                     {/* Response content */}
-                    <div className="flex-1 p-4 overflow-y-auto flex flex-col">
+                    <div className="flex-1 p-4 overflow-y-auto flex flex-col min-h-0 bg-slate-900/10">
                       {errorText && (
-                        <div className="mb-4 p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-lg text-xs font-mono select-text">
+                        <div className="mb-4 p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-lg text-xs font-mono select-text flex-shrink-0">
                           {errorText}
                         </div>
                       )}
 
                       {/* Standard Output */}
                       {responseTab === 'body' && (
-                        <div className="flex-1 flex flex-col">
+                        <div className="flex-grow flex flex-col min-h-0">
                           {response ? (
-                            <div className="flex-1 flex flex-col">
-                              <div className="flex gap-4 items-center mb-3 bg-white/5 border border-white/5 p-3 rounded-lg text-xs select-text">
-                                <div>
-                                  <span className="text-slate-400">Code: </span>
-                                  <strong className="text-emerald-400 font-semibold">{response.code}</strong>
-                                </div>
+                            <div className="flex-grow flex flex-col min-h-0">
+                              <div className="flex gap-4 items-center mb-3 bg-white/5 border border-white/5 p-3 rounded-lg text-xs select-text flex-shrink-0">
+                                <div>Status: <span className="font-mono text-emerald-400 font-bold">{response.code}</span></div>
                                 <div className="w-px h-3 bg-white/10" />
-                                <div>
-                                  <span className="text-slate-400">Time: </span>
-                                  <strong className="text-slate-200 font-semibold">{response.duration} ms</strong>
-                                </div>
+                                <div>Duration: <span className="font-mono text-indigo-400 font-bold">{response.duration} ms</span></div>
                               </div>
 
                               <textarea
                                 readOnly
                                 value={response.payload}
-                                className="flex-1 min-h-[300px] w-full bg-slate-950 border border-white/10 rounded-lg p-3 text-xs text-slate-200 outline-none font-mono resize-none focus:border-white/10 select-text"
+                                placeholder="Empty response body"
+                                className="flex-grow w-full min-h-[100px] bg-slate-950 border border-white/10 rounded-lg p-3 text-xs text-slate-300 outline-none font-mono resize-none select-text h-full overflow-y-auto"
                               />
                             </div>
                           ) : (
-                            <div className="flex-1 flex flex-col items-center justify-center text-slate-500 italic text-sm">
-                              {isRequesting ? 'Request pending...' : 'Send a request to see the response'}
+                            <div className="text-slate-500 italic text-sm text-center mt-8">
+                              Send a request to see the response payload
                             </div>
                           )}
                         </div>
                       )}
 
-                      {/* Options List */}
+                      {/* Options Output */}
                       {responseTab === 'options' && (
-                        <div>
-                          {response?.options && response.options.length > 0 ? (
-                            <div className="border border-white/5 rounded-lg overflow-hidden bg-slate-950/20 select-text">
+                        <div className="flex-grow overflow-y-auto">
+                          {response && response.options && response.options.length > 0 ? (
+                            <div className="border border-white/10 rounded-lg overflow-hidden select-text">
                               <table className="w-full text-left border-collapse text-xs">
                                 <thead>
-                                  <tr className="bg-white/5 border-b border-white/5 text-slate-400 font-semibold uppercase tracking-wider">
-                                    <th className="p-3">Option Header</th>
-                                    <th className="p-3">Value</th>
+                                  <tr className="bg-white/5 text-slate-400 font-semibold border-b border-white/10">
+                                    <th className="p-2.5">Option Number / Name</th>
+                                    <th className="p-2.5">Value</th>
                                   </tr>
                                 </thead>
-                                <tbody className="divide-y divide-white/5 text-slate-300">
+                                <tbody>
                                   {response.options.map((opt, i) => (
-                                    <tr key={i} className="hover:bg-white/[0.02]">
-                                      <td className="p-3 font-semibold text-indigo-400">{opt.key}</td>
-                                      <td className="p-3 font-mono">{opt.value}</td>
+                                    <tr key={i} className="border-b border-white/5 last:border-0 hover:bg-white/[0.01]">
+                                      <td className="p-2.5 font-mono text-indigo-400">{opt.key}</td>
+                                      <td className="p-2.5 font-mono text-slate-200 break-all">{opt.value}</td>
                                     </tr>
                                   ))}
                                 </tbody>
                               </table>
                             </div>
                           ) : (
-                            <div className="text-slate-500 italic text-sm text-center mt-12">
+                            <div className="text-slate-500 italic text-sm text-center mt-8">
                               No option headers returned
                             </div>
                           )}
@@ -1245,13 +1616,13 @@ export default function App() {
 
                       {/* Observe Stream log */}
                       {responseTab === 'observe' && (
-                        <div className="flex-1 flex flex-col select-text">
-                          <div className="flex justify-between items-center mb-3">
+                        <div className="flex-grow flex flex-col select-text min-h-0">
+                          <div className="flex justify-between items-center mb-3 flex-shrink-0">
                             <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Stream Notifications</label>
                             <span className="text-[10px] text-rose-400 animate-pulse font-medium">● ACTIVE STREAM</span>
                           </div>
 
-                          <div className="flex-1 bg-slate-950 border border-white/10 rounded-lg p-3 overflow-y-auto space-y-3 font-mono text-xs min-h-[300px]">
+                          <div className="flex-grow bg-slate-950 border border-white/10 rounded-lg p-3 overflow-y-auto space-y-3 font-mono text-xs h-full min-h-[100px]">
                             {observeLogs.map((log, i) => (
                               <div key={i} className="border-b border-white/5 pb-2 last:border-0">
                                 <div className="flex justify-between text-[10px] text-slate-500 mb-1">
@@ -1274,9 +1645,9 @@ export default function App() {
 
                       {/* Console logs */}
                       {responseTab === 'logs' && (
-                        <div className="flex-1 flex flex-col select-text">
-                          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Sandbox Output Console</label>
-                          <div className="flex-1 bg-slate-950 border border-white/10 rounded-lg p-3 font-mono text-xs text-indigo-300 min-h-[300px] overflow-y-auto space-y-1">
+                        <div className="flex-grow flex flex-col select-text min-h-0">
+                          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex-shrink-0">Sandbox Output Console</label>
+                          <div className="flex-grow bg-slate-950 border border-white/10 rounded-lg p-3 font-mono text-xs text-indigo-300 overflow-y-auto space-y-1 h-full min-h-[100px]">
                             {scriptLogs.map((log, i) => (
                               <div key={i} className="border-b border-white/5 pb-1 last:border-0">
                                 {log}
@@ -1292,7 +1663,6 @@ export default function App() {
                       )}
                     </div>
                   </div>
-
                 </div>
 
               </div>

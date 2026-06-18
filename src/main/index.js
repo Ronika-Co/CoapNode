@@ -25,10 +25,10 @@ function createWindow() {
   // Load the remote URL for development or the local html file for production.
   if (process.env.ELECTRON_RENDERER_URL) {
     mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
+    mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
-  mainWindow.webContents.openDevTools();
 }
 
 app.whenReady().then(() => {
@@ -37,7 +37,7 @@ app.whenReady().then(() => {
   // Config and storage IPC handlers
   ipcMain.handle('config:load', () => loadGlobalConfig())
   ipcMain.handle('config:save', (_event, config) => saveGlobalConfig(config))
-  
+
   ipcMain.handle('storage:select-directory', async (event) => {
     const window = BrowserWindow.fromWebContents(event.sender)
     const result = await dialog.showOpenDialog(window, {

@@ -19,7 +19,7 @@ function InputModal({ isOpen, onClose, onSubmit, title, placeholder, initialValu
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50">
       <div className="bg-slate-900 border border-white/10 rounded-2xl p-6 w-96 max-w-full shadow-2xl flex flex-col gap-4 animate-scale-up">
         <h3 className="text-base font-bold text-slate-100">{title}</h3>
         <input
@@ -56,7 +56,7 @@ function InputModal({ isOpen, onClose, onSubmit, title, placeholder, initialValu
 }
 
 export default function App() {
-  // Global path config
+  // Global configuration
   const [globalConfig, setGlobalConfig] = useState({ lastWorkspacePath: '', recentPaths: [] })
   const [activeWorkspacePath, setActiveWorkspacePath] = useState('')
   const [workspaceData, setWorkspaceData] = useState(null)
@@ -65,16 +65,23 @@ export default function App() {
   const [activeRequestId, setActiveRequestId] = useState('')
   const [activeReqConfig, setActiveReqConfig] = useState(null)
   
+  // Active environment configs
+  const [activeEnvId, setActiveEnvId] = useState('')
+
   // UI Tabs & States
+  const [sidebarTab, setSidebarTab] = useState('collections') // 'collections' | 'environments'
   const [requestTab, setRequestTab] = useState('params') // 'params' | 'options' | 'body' | 'preScript' | 'postScript'
   const [responseTab, setResponseTab] = useState('body') // 'body' | 'options' | 'observe' | 'logs'
   const [isRequesting, setIsRequesting] = useState(false)
   const [isObserving, setIsObserving] = useState(false)
   const [observeTeardown, setObserveTeardown] = useState(null)
 
+  // Floating hover variables tooltip state
+  const [tooltip, setTooltip] = useState({ show: false, text: '', x: 0, y: 0, isError: false })
+
   // Custom Modal States
-  const [modalType, setModalType] = useState('') // 'collection' | 'request' | 'rename' | ''
-  const [modalTargetId, setModalTargetId] = useState('') // collection ID or workspace ID
+  const [modalType, setModalType] = useState('') // 'collection' | 'request' | 'env' | ''
+  const [modalTargetId, setModalTargetId] = useState('') 
   const [isModalOpen, setIsModalOpen] = useState(false)
   
   // Response & Logs States
@@ -116,15 +123,79 @@ export default function App() {
     }
   }, [activeRequestId, workspaceData])
 
+  // Get current active environment variables
+  const getActiveEnvironment = () => {
+    if (!workspaceData || !workspaceData.activeEnvironmentId) return null
+    return (workspaceData.environments || []).find(e => e.id === workspaceData.activeEnvironmentId)
+  }
+
+  // Regex string interpolation function
+  const resolveVariables = (text) => {
+    if (typeof text !== 'string') return text
+    const activeEnv = getActiveEnvironment()
+    if (!activeEnv) return text
+    return text.replace(/\{\{([^}]+)\}\}/g, (match, key) => {
+      const varName = key.trim()
+      const found = (activeEnv.variables || []).find(v => v.key === varName)
+      return found ? found.value : match
+    })
+  }
+
+  // Interpolate full request config before send
+  const interpolateRequestConfig = (config) => {
+    return {
+      ...config,
+      url: resolveVariables(config.url),
+      queryParams: (config.queryParams || []).map(p => ({
+        key: resolveVariables(p.key),
+        value: resolveVariables(p.value)
+      })),
+      headers: (config.headers || []).map(h => ({
+        key: resolveVariables(h.key),
+        value: resolveVariables(h.value)
+      })),
+      payload: resolveVariables(config.payload)
+    }
+  }
+
+  // Handle Input Hover tooltip check
+  const handleInputHover = (e, val) => {
+    if (typeof val !== 'string') return
+    const matches = val.match(/\{\{([^}]+)\}\}/)
+    if (matches) {
+      const varName = matches[1].trim()
+      const activeEnv = getActiveEnvironment()
+      const found = activeEnv ? (activeEnv.variables || []).find(v => v.key === varName) : null
+      const rect = e.target.getBoundingClientRect()
+      
+      setTooltip({
+        show: true,
+        text: activeEnv 
+          ? (found ? `${varName}: "${found.value}" (${activeEnv.name})` : `{{${varName}}} (Undefined in ${activeEnv.name})`)
+          : `{{${varName}}} (No Environment selected)`,
+        isError: !found,
+        x: rect.left + window.scrollX,
+        y: rect.bottom + window.scrollY + 6
+      })
+    } else {
+      setTooltip({ show: false, text: '', x: 0, y: 0, isError: false })
+    }
+  }
+
   // Open directory workspace
   const handleOpenWorkspace = async (dirPath, currentConfig = globalConfig) => {
     if (!dirPath) return
     try {
       const wsData = await window.api.storage.loadWorkspace(dirPath)
+      
+      // Upgrade schema in memory in case it misses environments properties
+      if (!wsData.environments) wsData.environments = []
+      if (!wsData.activeEnvironmentId) wsData.activeEnvironmentId = ''
+
       setWorkspaceData(wsData)
       setActiveWorkspacePath(dirPath)
       
-      // Update global config
+      // Update global configs
       const updatedRecents = [dirPath, ...currentConfig.recentPaths.filter(p => p !== dirPath)].slice(0, 5)
       const updatedConfig = {
         lastWorkspacePath: dirPath,
@@ -145,7 +216,7 @@ export default function App() {
     }
   }
 
-  // Save changes to local directory
+  // Save workspace changes to local directory
   const saveWorkspaceState = async (updatedData) => {
     setWorkspaceData(updatedData)
     if (activeWorkspacePath) {
@@ -153,7 +224,7 @@ export default function App() {
     }
   }
 
-  // Close workspace and return to landing screen
+  // Close active workspace directory
   const handleCloseWorkspace = async () => {
     if (observeTeardown) observeTeardown()
     setIsObserving(false)
@@ -191,9 +262,25 @@ export default function App() {
     }
     const updated = {
       ...workspaceData,
-      collections: [...workspaceData.collections, newCol]
+      collections: [...(workspaceData.collections || []), newCol]
     }
     saveWorkspaceState(updated)
+  }
+
+  // Delete Collection folder (removes folders and nested requests)
+  const handleDeleteCollection = (colId) => {
+    if (!confirm('Are you sure you want to delete this folder collection and all its requests?')) return
+    const colToDelete = workspaceData.collections.find(c => c.id === colId)
+    const isEditingDeleted = colToDelete?.requests.some(r => r.id === activeRequestId)
+
+    const updated = {
+      ...workspaceData,
+      collections: workspaceData.collections.filter(c => c.id !== colId)
+    }
+    saveWorkspaceState(updated)
+    if (isEditingDeleted) {
+      setActiveRequestId('')
+    }
   }
 
   // Add Request
@@ -212,7 +299,7 @@ export default function App() {
     }
     const updatedCols = workspaceData.collections.map(c => {
       if (c.id === modalTargetId) {
-        return { ...c, requests: [...c.requests, newReq] }
+        return { ...c, requests: [...(c.requests || []), newReq] }
       }
       return c
     })
@@ -243,13 +330,94 @@ export default function App() {
     }
   }
 
-  // Update current request field
+  // Add Environment
+  const handleAddEnvironment = (name) => {
+    if (!workspaceData) return
+    const newEnv = {
+      id: Math.random().toString(),
+      name,
+      variables: []
+    }
+    const updated = {
+      ...workspaceData,
+      environments: [...(workspaceData.environments || []), newEnv],
+      activeEnvironmentId: workspaceData.activeEnvironmentId || newEnv.id
+    }
+    saveWorkspaceState(updated)
+    setActiveEnvId(newEnv.id)
+  }
+
+  // Delete Environment
+  const handleDeleteEnvironment = (envId) => {
+    if (!confirm('Are you sure you want to delete this environment?')) return
+    const updatedEnvs = (workspaceData.environments || []).filter(e => e.id !== envId)
+    const nextActive = workspaceData.activeEnvironmentId === envId 
+      ? (updatedEnvs.length > 0 ? updatedEnvs[0].id : '') 
+      : workspaceData.activeEnvironmentId
+
+    const updated = {
+      ...workspaceData,
+      environments: updatedEnvs,
+      activeEnvironmentId: nextActive
+    }
+    saveWorkspaceState(updated)
+    if (activeEnvId === envId) {
+      setActiveEnvId(updatedEnvs.length > 0 ? updatedEnvs[0].id : '')
+    }
+  }
+
+  // Update active environment ID
+  const handleSetActiveEnvironment = (envId) => {
+    saveWorkspaceState({
+      ...workspaceData,
+      activeEnvironmentId: envId
+    })
+  }
+
+  // Update variables within an environment
+  const handleUpdateEnvVariables = (envId, variables) => {
+    const updatedEnvs = workspaceData.environments.map(e => {
+      if (e.id === envId) {
+        return { ...e, variables }
+      }
+      return e
+    })
+    saveWorkspaceState({
+      ...workspaceData,
+      environments: updatedEnvs
+    })
+  }
+
+  const handleAddVariableRow = (envId) => {
+    const env = workspaceData.environments.find(e => e.id === envId)
+    if (!env) return
+    const vars = [...(env.variables || []), { key: '', value: '' }]
+    handleUpdateEnvVariables(envId, vars)
+  }
+
+  const handleUpdateVariableRow = (envId, index, field, val) => {
+    const env = workspaceData.environments.find(e => e.id === envId)
+    if (!env) return
+    const vars = [...(env.variables || [])]
+    vars[index] = { ...vars[index], [field]: val }
+    handleUpdateEnvVariables(envId, vars)
+  }
+
+  const handleDeleteVariableRow = (envId, index) => {
+    const env = workspaceData.environments.find(e => e.id === envId)
+    if (!env) return
+    const vars = [...(env.variables || [])]
+    vars.splice(index, 1)
+    handleUpdateEnvVariables(envId, vars)
+  }
+
+  // Update request input options
   const handleUpdateReqField = (field, value) => {
     if (!activeReqConfig || !workspaceData) return
     const updatedConfig = { ...activeReqConfig, [field]: value }
     setActiveReqConfig(updatedConfig)
 
-    // Save to local workspaces tree
+    // Save tree structure
     const updatedCols = workspaceData.collections.map(c => {
       const updatedReqs = c.requests.map(r => {
         if (r.id === activeRequestId) {
@@ -266,7 +434,7 @@ export default function App() {
     })
   }
 
-  // Option table handlers
+  // Options row tables
   const handleAddRow = (type) => {
     const list = activeReqConfig[type] || []
     handleUpdateReqField(type, [...list, { key: '', value: '' }])
@@ -292,8 +460,11 @@ export default function App() {
     setErrorText('')
     setIsRequesting(true)
 
+    // Resolve variables in request configuration before sending
+    const resolvedConfig = interpolateRequestConfig(activeReqConfig)
+
     try {
-      const res = await window.api.coap.send(activeReqConfig)
+      const res = await window.api.coap.send(resolvedConfig)
       setIsRequesting(false)
       if (res.success) {
         setResponse(res.response)
@@ -308,7 +479,7 @@ export default function App() {
     }
   }
 
-  // Trigger GET Observe Stream
+  // Trigger Observe Stream
   const handleToggleObserve = () => {
     if (isObserving) {
       if (observeTeardown) observeTeardown()
@@ -325,8 +496,11 @@ export default function App() {
     setIsObserving(true)
     setResponseTab('observe')
 
+    // Resolve variables before starting observe stream
+    const resolvedConfig = interpolateRequestConfig(activeReqConfig)
+
     try {
-      const teardown = window.api.coap.observe(activeReqConfig, (update) => {
+      const teardown = window.api.coap.observe(resolvedConfig, (update) => {
         if (update.type === 'message') {
           setObserveLogs(prev => [update.response, ...prev])
           if (update.logs && update.logs.length > 0) {
@@ -347,7 +521,7 @@ export default function App() {
     }
   }
 
-  // Cancel on-the-fly standard request
+  // Cancel running request
   const handleCancelRequest = async () => {
     if (!activeReqConfig) return
     await window.api.coap.cancel(activeRequestId)
@@ -366,22 +540,38 @@ export default function App() {
     }
   }
 
-  // Open modals helper
   const openInputModal = (type, targetId) => {
     setModalType(type)
     setModalTargetId(targetId)
     setIsModalOpen(true)
   }
 
+  const selectedEnvironment = (workspaceData?.environments || []).find(e => e.id === activeEnvId)
+
   return (
-    <div className="flex h-screen bg-slate-950 text-slate-100 font-sans overflow-hidden">
+    <div className="flex h-screen bg-slate-950 text-slate-100 font-sans overflow-hidden select-none relative">
       
+      {/* FLOATING HOVER VARIABLES TOOLTIP */}
+      {tooltip.show && (
+        <div 
+          style={{ left: tooltip.x, top: tooltip.y }}
+          className={`fixed px-3 py-1.5 rounded-lg border text-[10px] font-mono shadow-2xl z-[999] pointer-events-none transform -translate-x-1/2 animate-scale-up ${
+            tooltip.isError 
+              ? 'bg-rose-950/90 border-rose-500/40 text-rose-300' 
+              : 'bg-indigo-950/90 border-indigo-500/40 text-indigo-300'
+          }`}
+        >
+          {tooltip.text}
+        </div>
+      )}
+
       {workspaceData ? (
         // ACTIVE WORKSPACE VIEW
         <>
           {/* LEFT SIDEBAR: explorer */}
           <aside className="w-80 border-r border-white/5 bg-slate-950/80 flex flex-col justify-between">
-            <div>
+            <div className="flex flex-col h-full overflow-hidden">
+              
               {/* Workspace info & close button */}
               <div className="p-4 border-b border-white/5 flex flex-col gap-2">
                 <div className="flex justify-between items-center">
@@ -400,65 +590,161 @@ export default function App() {
                 </div>
               </div>
 
-              {/* List of collections & requests */}
-              <div className="p-4 flex-1 overflow-y-auto max-h-[calc(100vh-140px)]">
-                <div className="flex justify-between items-center mb-4">
-                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Collections</span>
-                  <button 
-                    onClick={() => openInputModal('collection', '')}
-                    className="text-xs bg-white/5 border border-white/10 px-2.5 py-1 rounded hover:bg-white/10 transition text-slate-300"
-                  >
-                    + Folder
-                  </button>
-                </div>
+              {/* Sidebar Tabs: Collections vs Environments */}
+              <div className="flex border-b border-white/5 bg-slate-950/40 text-xs font-semibold">
+                <button
+                  onClick={() => setSidebarTab('collections')}
+                  className={`flex-1 py-3 text-center border-b-2 transition ${
+                    sidebarTab === 'collections'
+                      ? 'border-indigo-500 text-slate-100 bg-white/[0.01]'
+                      : 'border-transparent text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Collections
+                </button>
+                <button
+                  onClick={() => setSidebarTab('environments')}
+                  className={`flex-1 py-3 text-center border-b-2 transition ${
+                    sidebarTab === 'environments'
+                      ? 'border-indigo-500 text-slate-100 bg-white/[0.01]'
+                      : 'border-transparent text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Environments
+                </button>
+              </div>
 
-                {workspaceData.collections.map(col => (
-                  <div key={col.id} className="mb-4">
-                    <div className="flex justify-between items-center py-1 group">
-                      <div className="flex items-center gap-2 text-slate-300 font-medium text-sm">
-                        <span className="text-amber-500 text-base">📁</span>
-                        <span className="truncate">{col.name}</span>
-                      </div>
+              {/* Sidebar Tab Contents */}
+              <div className="flex-1 overflow-y-auto p-4">
+                
+                {/* 1. COLLECTIONS VIEW */}
+                {sidebarTab === 'collections' && (
+                  <div>
+                    <div className="flex justify-between items-center mb-4">
+                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Folders</span>
                       <button 
-                        onClick={() => openInputModal('request', col.id)}
-                        className="opacity-0 group-hover:opacity-100 text-xs text-indigo-400 hover:text-indigo-300 transition"
+                        onClick={() => openInputModal('collection', '')}
+                        className="text-xs bg-white/5 border border-white/10 px-2.5 py-1 rounded hover:bg-white/10 transition text-slate-300"
                       >
-                        + Add Req
+                        + Folder
                       </button>
                     </div>
 
-                    <ul className="pl-4 mt-1 border-l border-white/5 space-y-1">
-                      {col.requests.map(req => (
-                        <li 
-                          key={req.id}
-                          className={`flex justify-between items-center p-2 rounded-lg text-xs group cursor-pointer border ${
-                            activeRequestId === req.id 
-                              ? 'bg-indigo-500/10 border-indigo-500/30 text-slate-100' 
-                              : 'border-transparent hover:bg-white/5 text-slate-400 hover:text-slate-200'
+                    {(workspaceData.collections || []).map(col => (
+                      <div key={col.id} className="mb-4">
+                        <div className="flex justify-between items-center py-1 group">
+                          <div className="flex items-center gap-2 text-slate-300 font-medium text-sm overflow-hidden mr-2">
+                            <span className="text-amber-500 text-base flex-shrink-0">📁</span>
+                            <span className="truncate">{col.name}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <button 
+                              onClick={() => openInputModal('request', col.id)}
+                              className="opacity-0 group-hover:opacity-100 text-[10px] text-indigo-400 hover:text-indigo-300 transition"
+                            >
+                              + Req
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteCollection(col.id)}
+                              className="opacity-0 group-hover:opacity-100 text-rose-500 hover:text-rose-400 text-xs transition px-1"
+                              title="Delete collection folder and nested requests"
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </div>
+
+                        <ul className="pl-4 mt-1 border-l border-white/5 space-y-1">
+                          {(col.requests || []).map(req => (
+                            <li 
+                              key={req.id}
+                              className={`flex justify-between items-center p-2 rounded-lg text-xs group cursor-pointer border ${
+                                activeRequestId === req.id 
+                                  ? 'bg-indigo-500/10 border-indigo-500/30 text-slate-100' 
+                                  : 'border-transparent hover:bg-white/5 text-slate-400 hover:text-slate-200'
+                              }`}
+                              onClick={() => setActiveRequestId(req.id)}
+                            >
+                              <div className="flex items-center gap-2 overflow-hidden mr-2">
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${getMethodStyle(req.method)}`}>
+                                  {req.method}
+                                </span>
+                                <span className="truncate">{req.name}</span>
+                              </div>
+                              
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleDeleteRequest(col.id, req.id)
+                                }}
+                                className="opacity-0 group-hover:opacity-100 text-rose-500 hover:text-rose-400 text-sm"
+                              >
+                                &times;
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+
+                    {(!workspaceData.collections || workspaceData.collections.length === 0) && (
+                      <div className="text-slate-500 italic text-xs text-center mt-8">
+                        No folders added yet
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 2. ENVIRONMENTS VIEW */}
+                {sidebarTab === 'environments' && (
+                  <div>
+                    <div className="flex justify-between items-center mb-4">
+                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Environments</span>
+                      <button 
+                        onClick={() => openInputModal('env', '')}
+                        className="text-xs bg-white/5 border border-white/10 px-2.5 py-1 rounded hover:bg-white/10 transition text-slate-300"
+                      >
+                        + Env
+                      </button>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      {(workspaceData.environments || []).map(env => (
+                        <div
+                          key={env.id}
+                          onClick={() => setActiveEnvId(env.id)}
+                          className={`flex justify-between items-center p-2.5 rounded-lg border text-xs cursor-pointer group transition ${
+                            activeEnvId === env.id
+                              ? 'bg-indigo-500/10 border-indigo-500/30 text-slate-100'
+                              : 'border-white/5 hover:bg-white/5 text-slate-400 hover:text-slate-200'
                           }`}
-                          onClick={() => setActiveRequestId(req.id)}
                         >
                           <div className="flex items-center gap-2 overflow-hidden mr-2">
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${getMethodStyle(req.method)}`}>
-                              {req.method}
-                            </span>
-                            <span className="truncate">{req.name}</span>
+                            <span>🌱</span>
+                            <span className="truncate">{env.name}</span>
                           </div>
                           
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
-                              handleDeleteRequest(col.id, req.id)
+                              handleDeleteEnvironment(env.id)
                             }}
                             className="opacity-0 group-hover:opacity-100 text-rose-500 hover:text-rose-400 text-sm"
                           >
                             &times;
                           </button>
-                        </li>
+                        </div>
                       ))}
-                    </ul>
+
+                      {(!workspaceData.environments || workspaceData.environments.length === 0) && (
+                        <div className="text-slate-500 italic text-xs text-center mt-8">
+                          No environments created yet
+                        </div>
+                      )}
+                    </div>
                   </div>
-                ))}
+                )}
+
               </div>
             </div>
 
@@ -468,8 +754,61 @@ export default function App() {
           </aside>
 
           {/* CENTRAL / RIGHT PANELS */}
-          <main className="flex-1 flex flex-col bg-slate-900/50">
-            {activeReqConfig ? (
+          <main className="flex-1 flex flex-col bg-slate-900/50 overflow-hidden">
+            
+            {/* Conditional Central Panel: Config Editor vs Environment Editor */}
+            {sidebarTab === 'environments' && selectedEnvironment ? (
+              // 1. ENVIRONMENTS EDITOR PANEL
+              <div className="flex-grow flex flex-col p-6 overflow-y-auto">
+                <div className="flex justify-between items-center mb-6 pb-4 border-b border-white/5">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">🌱</span>
+                    <h2 className="text-xl font-bold text-slate-100">{selectedEnvironment.name} Variables</h2>
+                  </div>
+                  <button
+                    onClick={() => handleAddVariableRow(selectedEnvironment.id)}
+                    className="text-xs bg-indigo-600 hover:bg-indigo-500 font-semibold px-4 py-2 rounded-xl text-white shadow-lg transition"
+                  >
+                    + Add Variable
+                  </button>
+                </div>
+
+                <div className="space-y-3 max-w-3xl">
+                  {selectedEnvironment.variables?.map((v, index) => (
+                    <div key={index} className="flex gap-3 items-center">
+                      <input
+                        type="text"
+                        value={v.key}
+                        onChange={(e) => handleUpdateVariableRow(selectedEnvironment.id, index, 'key', e.target.value)}
+                        placeholder="Variable Key (e.g. host)"
+                        className="flex-1 bg-white/5 border border-white/10 rounded-xl p-2.5 text-xs text-slate-200 outline-none focus:border-indigo-500/40 font-mono"
+                      />
+                      <input
+                        type="text"
+                        value={v.value}
+                        onChange={(e) => handleUpdateVariableRow(selectedEnvironment.id, index, 'value', e.target.value)}
+                        placeholder="Value (e.g. 127.0.0.1)"
+                        className="flex-1 bg-white/5 border border-white/10 rounded-xl p-2.5 text-xs text-slate-200 outline-none focus:border-indigo-500/40 font-mono"
+                      />
+                      <button
+                        onClick={() => handleDeleteVariableRow(selectedEnvironment.id, index)}
+                        className="text-rose-500 hover:text-rose-400 text-lg px-2"
+                      >
+                        &times;
+                      </button>
+                    </div>
+                  ))}
+
+                  {(!selectedEnvironment.variables || selectedEnvironment.variables.length === 0) && (
+                    <div className="text-slate-500 italic text-sm text-center p-8 border border-dashed border-white/5 rounded-2xl bg-white/[0.01]">
+                      No variables defined. Define variables and use them in requests as <code className="text-indigo-400 font-mono">{"{{variable}}"}</code>.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+            ) : activeReqConfig ? (
+              // 2. CENTRAL REQUEST CONFIG EDITOR
               <div className="flex-1 flex flex-col overflow-hidden">
                 
                 {/* Topbar URL / Methods */}
@@ -487,14 +826,36 @@ export default function App() {
                     <option value="DELETE" className="bg-slate-900 text-rose-400">DELETE</option>
                   </select>
 
-                  {/* URL Input */}
-                  <input
-                    type="text"
-                    value={activeReqConfig.url}
-                    onChange={(e) => handleUpdateReqField('url', e.target.value)}
-                    placeholder="coap://localhost:5683/resource"
-                    className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-slate-100 outline-none focus:border-indigo-500/50"
-                  />
+                  {/* URL Input (with hover tooltip preview) */}
+                  <div className="flex-1 relative">
+                    <input
+                      type="text"
+                      value={activeReqConfig.url}
+                      onChange={(e) => {
+                        handleUpdateReqField('url', e.target.value)
+                        handleInputHover(e, e.target.value)
+                      }}
+                      onMouseEnter={(e) => handleInputHover(e, activeReqConfig.url)}
+                      onMouseLeave={() => setTooltip({ show: false, text: '', x: 0, y: 0, isError: false })}
+                      placeholder="coap://{{host}}:5683/resource"
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-slate-100 outline-none focus:border-indigo-500/50"
+                    />
+                  </div>
+
+                  {/* Active Environment Selector Dropdown */}
+                  <select
+                    value={workspaceData.activeEnvironmentId || ''}
+                    onChange={(e) => handleSetActiveEnvironment(e.target.value)}
+                    className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-2 text-xs text-indigo-400 font-medium outline-none max-w-[150px] truncate"
+                    title="Active Environment"
+                  >
+                    <option value="" className="bg-slate-900 text-slate-500">No Environment</option>
+                    {(workspaceData.environments || []).map(env => (
+                      <option key={env.id} value={env.id} className="bg-slate-900 text-slate-200">
+                        🌱 {env.name}
+                      </option>
+                    ))}
+                  </select>
 
                   {/* Action Buttons */}
                   {isRequesting ? (
@@ -581,16 +942,26 @@ export default function App() {
                                 <input
                                   type="text"
                                   value={row.key}
-                                  onChange={(e) => handleUpdateRow('queryParams', idx, 'key', e.target.value)}
+                                  onChange={(e) => {
+                                    handleUpdateRow('queryParams', idx, 'key', e.target.value)
+                                    handleInputHover(e, e.target.value)
+                                  }}
+                                  onMouseEnter={(e) => handleInputHover(e, row.key)}
+                                  onMouseLeave={() => setTooltip({ show: false, text: '', x: 0, y: 0, isError: false })}
                                   placeholder="Key"
-                                  className="flex-1 bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500/40"
+                                  className="flex-1 bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500/40 font-mono"
                                 />
                                 <input
                                   type="text"
                                   value={row.value}
-                                  onChange={(e) => handleUpdateRow('queryParams', idx, 'value', e.target.value)}
+                                  onChange={(e) => {
+                                    handleUpdateRow('queryParams', idx, 'value', e.target.value)
+                                    handleInputHover(e, e.target.value)
+                                  }}
+                                  onMouseEnter={(e) => handleInputHover(e, row.value)}
+                                  onMouseLeave={() => setTooltip({ show: false, text: '', x: 0, y: 0, isError: false })}
                                   placeholder="Value"
-                                  className="flex-1 bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500/40"
+                                  className="flex-1 bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500/40 font-mono"
                                 />
                                 <button
                                   onClick={() => handleDeleteRow('queryParams', idx)}
@@ -609,7 +980,7 @@ export default function App() {
                         </div>
                       )}
 
-                      {/* Headers / Options Table */}
+                      {/* Options Table */}
                       {requestTab === 'options' && (
                         <div>
                           <div className="flex justify-between items-center mb-3">
@@ -628,16 +999,26 @@ export default function App() {
                                 <input
                                   type="text"
                                   value={row.key}
-                                  onChange={(e) => handleUpdateRow('headers', idx, 'key', e.target.value)}
+                                  onChange={(e) => {
+                                    handleUpdateRow('headers', idx, 'key', e.target.value)
+                                    handleInputHover(e, e.target.value)
+                                  }}
+                                  onMouseEnter={(e) => handleInputHover(e, row.key)}
+                                  onMouseLeave={() => setTooltip({ show: false, text: '', x: 0, y: 0, isError: false })}
                                   placeholder="e.g. Content-Format"
-                                  className="flex-1 bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500/40"
+                                  className="flex-1 bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500/40 font-mono"
                                 />
                                 <input
                                   type="text"
                                   value={row.value}
-                                  onChange={(e) => handleUpdateRow('headers', idx, 'value', e.target.value)}
+                                  onChange={(e) => {
+                                    handleUpdateRow('headers', idx, 'value', e.target.value)
+                                    handleInputHover(e, e.target.value)
+                                  }}
+                                  onMouseEnter={(e) => handleInputHover(e, row.value)}
+                                  onMouseLeave={() => setTooltip({ show: false, text: '', x: 0, y: 0, isError: false })}
                                   placeholder="e.g. application/json"
-                                  className="flex-1 bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500/40"
+                                  className="flex-1 bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500/40 font-mono"
                                 />
                                 <button
                                   onClick={() => handleDeleteRow('headers', idx)}
@@ -649,7 +1030,7 @@ export default function App() {
                             ))}
                             {(!activeReqConfig.headers || activeReqConfig.headers.length === 0) && (
                               <div className="text-xs text-slate-500 italic p-2 bg-white/5 rounded border border-white/5 text-center">
-                                No options added. Note: default settings will be resolved by the engine.
+                                No options added
                               </div>
                             )}
                           </div>
@@ -662,7 +1043,12 @@ export default function App() {
                           <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Request Payload</label>
                           <textarea
                             value={activeReqConfig.payload || ''}
-                            onChange={(e) => handleUpdateReqField('payload', e.target.value)}
+                            onChange={(e) => {
+                              handleUpdateReqField('payload', e.target.value)
+                              handleInputHover(e, e.target.value)
+                            }}
+                            onMouseEnter={(e) => handleInputHover(e, activeReqConfig.payload)}
+                            onMouseLeave={() => setTooltip({ show: false, text: '', x: 0, y: 0, isError: false })}
                             placeholder="Raw text payload to send (POST/PUT)..."
                             className="flex-1 min-h-[300px] w-full bg-slate-950 border border-white/10 rounded-lg p-3 text-xs text-slate-200 outline-none focus:border-indigo-500/50 font-mono resize-none"
                           />
@@ -671,33 +1057,71 @@ export default function App() {
 
                       {/* Pre-Request Script */}
                       {requestTab === 'preScript' && (
-                        <div className="h-full flex flex-col">
-                          <div className="flex justify-between items-center mb-2">
+                        <div className="h-full flex flex-col gap-3">
+                          <div className="flex justify-between items-center">
                             <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Pre-Request Script (NodeJS sandbox)</label>
-                            <span className="text-[10px] text-slate-500 italic">Access: request.payload, request.url, console.log</span>
+                            <span className="text-[10px] text-indigo-400 font-bold bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">JavaScript Enabled</span>
                           </div>
-                          <textarea
-                            value={activeReqConfig.preScript || ''}
-                            onChange={(e) => handleUpdateReqField('preScript', e.target.value)}
-                            placeholder="// Write pre-request script here...&#10;request.payload = JSON.stringify({ updated: true });"
-                            className="flex-1 min-h-[300px] w-full bg-slate-950 border border-white/10 rounded-lg p-3 text-xs text-indigo-200 outline-none focus:border-indigo-500/50 font-mono resize-none"
-                          />
+                          
+                          <div className="flex flex-col md:flex-row gap-3">
+                            <textarea
+                              value={activeReqConfig.preScript || ''}
+                              onChange={(e) => handleUpdateReqField('preScript', e.target.value)}
+                              placeholder="// Write pre-request script here...&#10;request.payload = 'mutated payload';"
+                              className="flex-1 min-h-[200px] bg-slate-950 border border-white/10 rounded-lg p-3 text-xs text-indigo-200 outline-none focus:border-indigo-500/50 font-mono resize-none"
+                            />
+                            
+                            {/* Script Reference Tips Panel */}
+                            <div className="w-full md:w-56 p-3 bg-white/[0.02] border border-white/5 rounded-lg text-[10px] text-slate-400 flex flex-col gap-2 font-sans select-text">
+                              <span className="font-semibold text-slate-200 text-xs">NodeJS Sandbox API</span>
+                              <p>This script runs in a sandboxed NodeJS `vm` context before request transmission.</p>
+                              <div className="h-px bg-white/5" />
+                              <span className="font-semibold text-slate-200">Context Properties:</span>
+                              <ul className="list-disc pl-4 space-y-1 text-slate-300 font-mono">
+                                <li>request.url (string)</li>
+                                <li>request.payload (string)</li>
+                                <li>request.method (string)</li>
+                              </ul>
+                              <div className="h-px bg-white/5" />
+                              <span className="font-semibold text-slate-200">Examples:</span>
+                              <code className="text-indigo-400 block whitespace-pre-wrap">request.payload = "Mutated text";&#10;console.log("Starting req...");</code>
+                            </div>
+                          </div>
                         </div>
                       )}
 
                       {/* Post-Request Script */}
                       {requestTab === 'postScript' && (
-                        <div className="h-full flex flex-col">
-                          <div className="flex justify-between items-center mb-2">
+                        <div className="h-full flex flex-col gap-3">
+                          <div className="flex justify-between items-center">
                             <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Post-Request Script (NodeJS sandbox)</label>
-                            <span className="text-[10px] text-slate-500 italic">Access: response.code, response.payload, console.log</span>
+                            <span className="text-[10px] text-indigo-400 font-bold bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">JavaScript Enabled</span>
                           </div>
-                          <textarea
-                            value={activeReqConfig.postScript || ''}
-                            onChange={(e) => handleUpdateReqField('postScript', e.target.value)}
-                            placeholder="// Write post-request script here...&#10;console.log('Status code: ' + response.code);"
-                            className="flex-1 min-h-[300px] w-full bg-slate-950 border border-white/10 rounded-lg p-3 text-xs text-indigo-200 outline-none focus:border-indigo-500/50 font-mono resize-none"
-                          />
+                          
+                          <div className="flex flex-col md:flex-row gap-3">
+                            <textarea
+                              value={activeReqConfig.postScript || ''}
+                              onChange={(e) => handleUpdateReqField('postScript', e.target.value)}
+                              placeholder="// Write post-request script here...&#10;console.log('Status: ' + response.code);"
+                              className="flex-1 min-h-[200px] bg-slate-950 border border-white/10 rounded-lg p-3 text-xs text-indigo-200 outline-none focus:border-indigo-500/50 font-mono resize-none"
+                            />
+                            
+                            {/* Script Reference Tips Panel */}
+                            <div className="w-full md:w-56 p-3 bg-white/[0.02] border border-white/5 rounded-lg text-[10px] text-slate-400 flex flex-col gap-2 font-sans select-text">
+                              <span className="font-semibold text-slate-200 text-xs">NodeJS Sandbox API</span>
+                              <p>This script runs in a sandboxed NodeJS `vm` context after response reception.</p>
+                              <div className="h-px bg-white/5" />
+                              <span className="font-semibold text-slate-200">Context Properties:</span>
+                              <ul className="list-disc pl-4 space-y-1 text-slate-300 font-mono">
+                                <li>response.code (string)</li>
+                                <li>response.payload (string)</li>
+                                <li>response.options (array)</li>
+                              </ul>
+                              <div className="h-px bg-white/5" />
+                              <span className="font-semibold text-slate-200">Examples:</span>
+                              <code className="text-indigo-400 block whitespace-pre-wrap">console.log("Body: " + response.payload);</code>
+                            </div>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -753,7 +1177,7 @@ export default function App() {
                     {/* Response content */}
                     <div className="flex-1 p-4 overflow-y-auto flex flex-col">
                       {errorText && (
-                        <div className="mb-4 p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-lg text-xs font-mono">
+                        <div className="mb-4 p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-lg text-xs font-mono select-text">
                           {errorText}
                         </div>
                       )}
@@ -763,7 +1187,7 @@ export default function App() {
                         <div className="flex-1 flex flex-col">
                           {response ? (
                             <div className="flex-1 flex flex-col">
-                              <div className="flex gap-4 items-center mb-3 bg-white/5 border border-white/5 p-3 rounded-lg text-xs">
+                              <div className="flex gap-4 items-center mb-3 bg-white/5 border border-white/5 p-3 rounded-lg text-xs select-text">
                                 <div>
                                   <span className="text-slate-400">Code: </span>
                                   <strong className="text-emerald-400 font-semibold">{response.code}</strong>
@@ -778,7 +1202,7 @@ export default function App() {
                               <textarea
                                 readOnly
                                 value={response.payload}
-                                className="flex-1 min-h-[300px] w-full bg-slate-950 border border-white/10 rounded-lg p-3 text-xs text-slate-200 outline-none font-mono resize-none focus:border-white/10"
+                                className="flex-1 min-h-[300px] w-full bg-slate-950 border border-white/10 rounded-lg p-3 text-xs text-slate-200 outline-none font-mono resize-none focus:border-white/10 select-text"
                               />
                             </div>
                           ) : (
@@ -793,7 +1217,7 @@ export default function App() {
                       {responseTab === 'options' && (
                         <div>
                           {response?.options && response.options.length > 0 ? (
-                            <div className="border border-white/5 rounded-lg overflow-hidden bg-slate-950/20">
+                            <div className="border border-white/5 rounded-lg overflow-hidden bg-slate-950/20 select-text">
                               <table className="w-full text-left border-collapse text-xs">
                                 <thead>
                                   <tr className="bg-white/5 border-b border-white/5 text-slate-400 font-semibold uppercase tracking-wider">
@@ -821,7 +1245,7 @@ export default function App() {
 
                       {/* Observe Stream log */}
                       {responseTab === 'observe' && (
-                        <div className="flex-1 flex flex-col">
+                        <div className="flex-1 flex flex-col select-text">
                           <div className="flex justify-between items-center mb-3">
                             <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Stream Notifications</label>
                             <span className="text-[10px] text-rose-400 animate-pulse font-medium">● ACTIVE STREAM</span>
@@ -850,7 +1274,7 @@ export default function App() {
 
                       {/* Console logs */}
                       {responseTab === 'logs' && (
-                        <div className="flex-1 flex flex-col">
+                        <div className="flex-1 flex flex-col select-text">
                           <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Sandbox Output Console</label>
                           <div className="flex-1 bg-slate-950 border border-white/10 rounded-lg p-3 font-mono text-xs text-indigo-300 min-h-[300px] overflow-y-auto space-y-1">
                             {scriptLogs.map((log, i) => (
@@ -873,13 +1297,16 @@ export default function App() {
 
               </div>
             ) : (
-              <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
+              // 3. NO ACTIVE REQUEST SELECTED VIEW
+              <div className="flex-grow flex flex-col items-center justify-center text-center p-6 bg-slate-900/10">
                 <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center text-3xl font-bold mb-4 shadow-lg shadow-indigo-500/5">
                   C
                 </div>
-                <h2 className="text-2xl font-bold tracking-tight mb-2">No Active Request Selected</h2>
+                <h2 className="text-2xl font-bold tracking-tight mb-2">No Active Request</h2>
                 <p className="text-slate-400 text-sm max-w-sm">
-                  Choose a request from the collections tree on the sidebar, or create a folder collection to get started.
+                  {sidebarTab === 'environments' 
+                    ? 'Select an environment in the sidebar to configure variables, or choose Collections tab to run requests.' 
+                    : 'Choose a request from the collections tree on the sidebar, or create a folder collection to get started.'}
                 </p>
               </div>
             )}
@@ -907,7 +1334,7 @@ export default function App() {
 
             {/* Error Message */}
             {errorText && (
-              <div className="p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-xl text-xs font-mono text-left">
+              <div className="p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-xl text-xs font-mono text-left select-text">
                 {errorText}
               </div>
             )}
@@ -915,14 +1342,14 @@ export default function App() {
             {/* Main Action */}
             <button
               onClick={handleSelectDirectory}
-              className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 active:scale-98 transition rounded-xl font-semibold text-sm text-white tracking-wide shadow-lg shadow-indigo-500/15"
+              className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 active:scale-98 transition rounded-xl font-semibold text-sm text-white tracking-wide shadow-lg shadow-indigo-500/15 animate-fade-in"
             >
               Open / Create Workspace Folder
             </button>
 
             {/* Recent Workspaces */}
             {globalConfig.recentPaths && globalConfig.recentPaths.length > 0 && (
-              <div className="flex flex-col gap-2.5 text-left border-t border-white/5 pt-4">
+              <div className="flex flex-col gap-2.5 text-left border-t border-white/5 pt-4 select-text">
                 <div className="flex justify-between items-center">
                   <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">Recent Locations</span>
                   <button 
@@ -950,7 +1377,7 @@ export default function App() {
         </div>
       )}
 
-      {/* CUSTOM NAME MODAL OVERLAYS */}
+      {/* CUSTOM INPUT MODALS */}
       <InputModal
         isOpen={isModalOpen && modalType === 'collection'}
         onClose={() => setIsModalOpen(false)}
@@ -965,6 +1392,14 @@ export default function App() {
         onSubmit={handleAddRequest}
         title="Create CoAP Request"
         placeholder="Enter request name..."
+      />
+
+      <InputModal
+        isOpen={isModalOpen && modalType === 'env'}
+        onClose={() => setIsModalOpen(false)}
+        onSubmit={handleAddEnvironment}
+        title="Create Environment"
+        placeholder="e.g. Production, Staging"
       />
 
     </div>

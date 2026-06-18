@@ -15,25 +15,9 @@ const getGlobalConfigPath = () => {
 const getInitialWorkspaceState = (name = 'New CoAP Workspace') => ({
   id: Math.random().toString(),
   name: name,
-  collections: [
-    {
-      id: Math.random().toString(),
-      name: 'Sample Collection',
-      requests: [
-        {
-          id: Math.random().toString(),
-          name: 'CoAP Test GET',
-          url: 'coap://coap.me/test',
-          method: 'GET',
-          queryParams: [],
-          headers: [],
-          payload: '',
-          preScript: '// Pre-request script\nconsole.log("Pre-request script executed");',
-          postScript: '// Post-request script\nconsole.log("Response status: " + response.code);'
-        }
-      ]
-    }
-  ]
+  collections: [],
+  environments: [],
+  activeEnvironmentId: ''
 })
 
 // Load global configuration

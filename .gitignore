@@ -1,0 +1,7 @@
+**/node_modules
+**/node_modules/**
+.gemini
+.agent
+out/
+dist/
+*.log

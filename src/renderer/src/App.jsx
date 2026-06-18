@@ -90,6 +90,16 @@ export default function App() {
   const [observeLogs, setObserveLogs] = useState([])
   const [errorText, setErrorText] = useState('')
 
+  // Mock Server States
+  const [isMockRunning, setIsMockRunning] = useState(false)
+  const [activeRouteId, setActiveRouteId] = useState('')
+  const [mockActivityLogs, setMockActivityLogs] = useState([])
+  const [mockConsoleLogs, setMockConsoleLogs] = useState([])
+  const [mockLogsTab, setMockLogsTab] = useState('activity') // 'activity' | 'console'
+
+  // Active mock route config
+  const activeRoute = workspaceData?.mockRoutes?.find(r => r.id === activeRouteId) || null
+
   // Resizable layout states
   const [sidebarWidth, setSidebarWidth] = useState(320)
   const [requestHeight, setRequestHeight] = useState(400)
@@ -101,6 +111,8 @@ export default function App() {
   const preScriptTextareaRef = React.useRef(null)
   const postScriptGutterRef = React.useRef(null)
   const postScriptTextareaRef = React.useRef(null)
+  const mockRouteScriptGutterRef = React.useRef(null)
+  const mockRouteScriptTextareaRef = React.useRef(null)
 
   // Variables Autocomplete state
   const [suggestion, setSuggestion] = useState({
@@ -124,6 +136,34 @@ export default function App() {
       }
     })
   }, [])
+
+  // Mock Server listeners and state sync
+  useEffect(() => {
+    let unsubs = []
+
+    if (workspaceData) {
+      window.api.mockServer.status().then((status) => {
+        setIsMockRunning(status.running)
+      })
+
+      const unsubRequest = window.api.mockServer.onRequestReceived((req) => {
+        setMockActivityLogs(prev => [req, ...prev].slice(0, 100))
+      })
+      const unsubLogs = window.api.mockServer.onScriptLogs((logItem) => {
+        setMockConsoleLogs(prev => [logItem, ...prev].slice(0, 100))
+      })
+      const unsubError = window.api.mockServer.onError((errorMsg) => {
+        setErrorText(`Mock Server Error: ${errorMsg}`)
+        setIsMockRunning(false)
+      })
+
+      unsubs = [unsubRequest, unsubLogs, unsubError]
+    }
+
+    return () => {
+      unsubs.forEach(unsub => unsub())
+    }
+  }, [workspaceData])
 
   // Find active request inside the active workspace
   useEffect(() => {
@@ -411,6 +451,8 @@ export default function App() {
       // Upgrade schema in memory in case it misses environments properties
       if (!wsData.environments) wsData.environments = []
       if (!wsData.activeEnvironmentId) wsData.activeEnvironmentId = ''
+      if (wsData.mockPort === undefined) wsData.mockPort = 5683
+      if (!wsData.mockRoutes) wsData.mockRoutes = []
 
       setWorkspaceData(wsData)
       setActiveWorkspacePath(dirPath)
@@ -453,6 +495,11 @@ export default function App() {
     setActiveWorkspacePath('')
     setActiveRequestId('')
     setResponse(null)
+    setIsMockRunning(false)
+    setActiveRouteId('')
+    setMockActivityLogs([])
+    setMockConsoleLogs([])
+    await window.api.mockServer.stop()
 
     const updatedConfig = {
       ...globalConfig,
@@ -607,6 +654,83 @@ export default function App() {
       ...workspaceData,
       environments: updatedEnvs
     })
+  }
+
+  // Toggle Mock Server running state
+  const handleToggleMockServer = async () => {
+    if (isMockRunning) {
+      try {
+        await window.api.mockServer.stop()
+        setIsMockRunning(false)
+      } catch (e) {
+        setErrorText(`Failed to stop mock server: ${e.message}`)
+      }
+    } else {
+      try {
+        const port = workspaceData.mockPort || 5683
+        const routes = workspaceData.mockRoutes || []
+        await window.api.mockServer.start(port, routes)
+        setIsMockRunning(true)
+      } catch (e) {
+        setErrorText(`Failed to start mock server: ${e.message}`)
+      }
+    }
+  }
+
+  // Add Mock Route
+  const handleAddMockRoute = (path) => {
+    if (!workspaceData) return
+    const formattedPath = '/' + path.replace(/^\//, '')
+    const newRoute = {
+      id: Math.random().toString(),
+      method: 'GET',
+      path: formattedPath,
+      script: `// Mock Response Script\nresponse.code = '2.05';\nresponse.payload = 'Hello from CoAP Mock Server!';\n`
+    }
+    const updatedRoutes = [...(workspaceData.mockRoutes || []), newRoute]
+    const updated = {
+      ...workspaceData,
+      mockRoutes: updatedRoutes
+    }
+    saveWorkspaceState(updated)
+    setActiveRouteId(newRoute.id)
+    if (isMockRunning) {
+      window.api.mockServer.updateRoutes(updatedRoutes)
+    }
+  }
+
+  // Delete Mock Route
+  const handleDeleteMockRoute = (routeId) => {
+    if (!confirm('Are you sure you want to delete this mock route?')) return
+    const updatedRoutes = (workspaceData.mockRoutes || []).filter(r => r.id !== routeId)
+    const updated = {
+      ...workspaceData,
+      mockRoutes: updatedRoutes
+    }
+    saveWorkspaceState(updated)
+    if (activeRouteId === routeId) {
+      setActiveRouteId('')
+    }
+    if (isMockRunning) {
+      window.api.mockServer.updateRoutes(updatedRoutes)
+    }
+  }
+
+  // Update Mock Route
+  const handleUpdateMockRoute = (routeId, fields) => {
+    const updatedRoutes = (workspaceData.mockRoutes || []).map(r => {
+      if (r.id === routeId) {
+        return { ...r, ...fields }
+      }
+      return r
+    })
+    saveWorkspaceState({
+      ...workspaceData,
+      mockRoutes: updatedRoutes
+    })
+    if (isMockRunning) {
+      window.api.mockServer.updateRoutes(updatedRoutes)
+    }
   }
 
   const handleAddVariableRow = (envId) => {
@@ -851,7 +975,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Sidebar Tabs: Collections vs Environments */}
+              {/* Sidebar Tabs: Collections vs Environments vs Mock Server */}
               <div className="flex border-b border-white/5 bg-slate-950/40 text-xs font-semibold">
                 <button
                   onClick={() => setSidebarTab('collections')}
@@ -872,6 +996,16 @@ export default function App() {
                   }`}
                 >
                   Environments
+                </button>
+                <button
+                  onClick={() => setSidebarTab('mock')}
+                  className={`flex-1 py-3 text-center border-b-2 transition ${
+                    sidebarTab === 'mock'
+                      ? 'border-indigo-500 text-slate-100 bg-white/[0.01]'
+                      : 'border-transparent text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Mock Server
                 </button>
               </div>
 
@@ -1006,6 +1140,58 @@ export default function App() {
                   </div>
                 )}
 
+                {/* 3. MOCK SERVER VIEW */}
+                {sidebarTab === 'mock' && (
+                  <div>
+                    <div className="flex justify-between items-center mb-4">
+                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Mock Routes</span>
+                      <button 
+                        onClick={() => openInputModal('mockRoute', '')}
+                        className="text-xs bg-white/5 border border-white/10 px-2.5 py-1 rounded hover:bg-white/10 transition text-slate-300"
+                      >
+                        + Route
+                      </button>
+                    </div>
+
+                    <div className="space-y-1">
+                      {(workspaceData.mockRoutes || []).map(route => (
+                        <div 
+                          key={route.id}
+                          className={`flex justify-between items-center p-2 rounded-lg text-xs group cursor-pointer border ${
+                            activeRouteId === route.id 
+                              ? 'bg-indigo-500/10 border-indigo-500/30 text-slate-100' 
+                              : 'border-transparent hover:bg-white/5 text-slate-400 hover:text-slate-200'
+                          }`}
+                          onClick={() => setActiveRouteId(route.id)}
+                        >
+                          <div className="flex items-center gap-2 overflow-hidden mr-2">
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${getMethodStyle(route.method || 'GET')}`}>
+                              {route.method || 'GET'}
+                            </span>
+                            <span className="truncate font-mono">{route.path}</span>
+                          </div>
+                          
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleDeleteMockRoute(route.id)
+                            }}
+                            className="opacity-0 group-hover:opacity-100 text-rose-500 hover:text-rose-400 text-sm font-bold"
+                          >
+                            &times;
+                          </button>
+                        </div>
+                      ))}
+
+                      {(!workspaceData.mockRoutes || workspaceData.mockRoutes.length === 0) && (
+                        <div className="text-slate-500 italic text-xs text-center mt-8">
+                          No mock routes created yet
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
               </div>
             </div>
 
@@ -1068,6 +1254,260 @@ export default function App() {
                 </div>
               </div>
 
+            ) : sidebarTab === 'mock' ? (
+              // MOCK SERVER PANEL
+              <div className="flex-1 flex flex-col overflow-hidden bg-slate-900/10">
+                {/* Mock Server Header Controller */}
+                <div className="p-4 border-b border-white/5 bg-slate-950/20 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 flex-shrink-0">
+                  <div className="flex items-center gap-4">
+                    <span className="text-xl">🛠️</span>
+                    <h2 className="text-base font-bold text-slate-100">CoAP Mock Server</h2>
+                    
+                    {/* Status Badge */}
+                    <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-3 py-1 text-xs">
+                      <span className={`w-2 h-2 rounded-full ${isMockRunning ? 'bg-emerald-500 animate-pulse' : 'bg-slate-500'}`} />
+                      <span className="font-semibold text-slate-300">
+                        {isMockRunning ? `Running on Port ${workspaceData.mockPort || 5683}` : 'Stopped'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end">
+                    {/* Port configuration */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-400 uppercase font-semibold">Port</span>
+                      <input
+                        type="number"
+                        value={workspaceData.mockPort || 5683}
+                        disabled={isMockRunning}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value, 10) || 5683
+                          saveWorkspaceState({
+                            ...workspaceData,
+                            mockPort: val
+                          })
+                        }}
+                        className="w-20 bg-white/5 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500/40 font-mono disabled:opacity-50"
+                      />
+                    </div>
+
+                    {/* Start/Stop Button */}
+                    <button
+                      onClick={handleToggleMockServer}
+                      className={`px-4 py-1.5 rounded-xl text-xs font-bold transition shadow-lg ${
+                        isMockRunning 
+                          ? 'bg-rose-600 hover:bg-rose-500 text-white' 
+                          : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                      }`}
+                    >
+                      {isMockRunning ? 'Stop Server' : 'Start Server'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Main panel: Stacked Route Editor (Top) & Activity/Console logs (Bottom) */}
+                <div id="main-panel-container" className="flex-1 flex flex-col overflow-hidden relative">
+                  {/* Top: Route Editor */}
+                  <div style={{ height: requestHeight }} className="flex flex-col overflow-hidden flex-shrink-0 relative border-b border-white/5 bg-slate-900/10">
+                    {activeRoute ? (
+                      <div className="flex-grow flex flex-col overflow-hidden min-h-0">
+                        {/* Route method, path bar */}
+                        <div className="p-4 border-b border-white/5 bg-slate-950/10 flex gap-3 items-center flex-shrink-0">
+                          <select
+                            value={activeRoute.method || 'GET'}
+                            onChange={(e) => handleUpdateMockRoute(activeRoute.id, { method: e.target.value })}
+                            className="bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs font-semibold text-slate-200 outline-none focus:border-indigo-500/40"
+                          >
+                            <option value="GET">GET</option>
+                            <option value="POST">POST</option>
+                            <option value="PUT">PUT</option>
+                            <option value="DELETE">DELETE</option>
+                          </select>
+
+                          <input
+                            type="text"
+                            value={activeRoute.path || ''}
+                            onChange={(e) => handleUpdateMockRoute(activeRoute.id, { path: e.target.value })}
+                            placeholder="/resource-path"
+                            className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-indigo-500/40 font-mono"
+                          />
+                        </div>
+
+                        {/* Script Editor & Sandbox Reference */}
+                        <div className="flex-grow flex flex-col md:flex-row overflow-hidden min-h-0">
+                          {/* Script Editor Area */}
+                          <div className="flex-1 flex flex-col p-4 overflow-hidden min-h-0">
+                            <label className="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-2">Sandbox Handler Script (NodeJS)</label>
+                            
+                            <div className="flex-grow flex bg-slate-950 border border-white/10 rounded-xl overflow-hidden font-mono text-xs relative h-full">
+                              {/* Gutter scroll synced */}
+                              <div 
+                                ref={mockRouteScriptGutterRef}
+                                className="w-10 bg-slate-900/60 border-r border-white/5 py-3 pr-2 text-right text-slate-600 select-none overflow-y-hidden text-[11px]"
+                                style={{ lineHeight: '20px' }}
+                              >
+                                {Array.from({ length: (activeRoute.script || '').split('\n').length || 1 }).map((_, idx) => (
+                                  <div key={idx} className="h-5">{idx + 1}</div>
+                                ))}
+                              </div>
+                              <textarea
+                                ref={mockRouteScriptTextareaRef}
+                                value={activeRoute.script || ''}
+                                onChange={(e) => {
+                                  handleUpdateMockRoute(activeRoute.id, { script: e.target.value })
+                                  checkAutocompleteTrigger(e, e.target.value)
+                                }}
+                                onKeyDown={handleInputKeyDown}
+                                onScroll={(e) => {
+                                  if (mockRouteScriptGutterRef.current) {
+                                    mockRouteScriptGutterRef.current.scrollTop = e.target.scrollTop
+                                  }
+                                }}
+                                placeholder="// Write custom mock response script here...&#10;response.code = '2.05';&#10;response.payload = JSON.stringify({ hello: 'world' });"
+                                className="flex-grow py-3 px-3 bg-transparent outline-none text-indigo-200 resize-none h-full overflow-y-auto leading-5"
+                                style={{ lineHeight: '20px', fontFamily: 'monospace' }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Reference Side Pane */}
+                          <div className="w-full md:w-80 border-t md:border-t-0 md:border-l border-white/5 bg-slate-950/20 p-4 overflow-y-auto text-xs text-slate-400">
+                            <h3 className="font-semibold text-slate-300 mb-2 uppercase tracking-wider text-[10px]">VM Sandbox Context</h3>
+                            <div className="space-y-3 font-mono text-[10px]">
+                              <div>
+                                <span className="text-indigo-300 block">request</span>
+                                <span className="text-slate-500 pl-2 block">- method: string</span>
+                                <span className="text-slate-500 pl-2 block">- payload: string</span>
+                                <span className="text-slate-500 pl-2 block">- options: Array{"<{key, value}>"}</span>
+                              </div>
+                              <div>
+                                <span className="text-indigo-300 block">response</span>
+                                <span className="text-slate-500 pl-2 block">- code: string (default '2.05')</span>
+                                <span className="text-slate-500 pl-2 block">- payload: string (default 'Mock Response')</span>
+                                <span className="text-slate-500 pl-2 block">- options: Array{"<{key, value}>"}</span>
+                              </div>
+                              <div>
+                                <span className="text-indigo-300 block">console.log(...args)</span>
+                                <span className="text-slate-500 pl-2 block">Logs to mock script log console</span>
+                              </div>
+                              
+                              <div className="h-px bg-white/5 pt-2" />
+                              <span className="font-semibold text-slate-200">Example:</span>
+                              <code className="text-indigo-400 block whitespace-pre-wrap leading-relaxed">
+{`// Return JSON response
+response.code = '2.05';
+response.payload = JSON.stringify({
+  status: 'ok',
+  received: request.payload
+});
+response.options.push({
+  key: 'Content-Format',
+  value: '50'
+});
+console.log('Processed request: ' + request.payload);`}
+                              </code>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex-grow flex items-center justify-center text-slate-500 italic text-sm">
+                        Select a mock route from the sidebar, or create a new route to edit its behavior.
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Horizontal Resizer Divider handle */}
+                  <div 
+                    onMouseDown={startResizeRequest}
+                    className="h-[4px] cursor-row-resize bg-white/5 hover:bg-indigo-500/50 transition-colors z-20 flex-shrink-0"
+                  />
+
+                  {/* Bottom: Logs & Console */}
+                  <div className="flex-grow flex flex-col overflow-hidden bg-slate-950/5 min-h-[150px]">
+                    <div className="flex justify-between items-center border-b border-white/5 bg-slate-950/10 flex-shrink-0 pr-4">
+                      <div className="flex">
+                        {['activity', 'console'].map((tab) => (
+                          <button
+                            key={tab}
+                            onClick={() => setMockLogsTab(tab)}
+                            className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition ${
+                              mockLogsTab === tab 
+                                ? 'border-indigo-500 text-slate-100 bg-white/[0.02]' 
+                                : 'border-transparent text-slate-400 hover:text-slate-200'
+                            }`}
+                          >
+                            {tab === 'activity' ? 'Request Activity' : 'Script Console Logs'}
+                          </button>
+                        ))}
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          if (mockLogsTab === 'activity') {
+                            setMockActivityLogs([])
+                          } else {
+                            setMockConsoleLogs([])
+                          }
+                        }}
+                        className="text-[10px] bg-white/5 border border-white/10 px-2.5 py-1 rounded hover:bg-white/10 transition text-slate-300 font-semibold"
+                      >
+                        Clear Logs
+                      </button>
+                    </div>
+
+                    <div className="flex-grow overflow-y-auto p-4 font-mono text-xs min-h-0">
+                      {mockLogsTab === 'activity' ? (
+                        <div className="space-y-1">
+                          {mockActivityLogs.map((log, idx) => (
+                            <div key={idx} className="flex flex-col sm:flex-row sm:items-center gap-2 py-1.5 border-b border-white/5 text-slate-300 text-[11px]">
+                              <span className="text-slate-500 text-[10px]">{log.timestamp}</span>
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold self-start sm:self-auto ${getMethodStyle(log.method)}`}>
+                                {log.method}
+                              </span>
+                              <span className="text-slate-200 font-semibold truncate max-w-[200px]" title={log.path}>{log.path}</span>
+                              <span className="text-slate-500 text-[10px] sm:ml-auto">{log.remoteAddress}</span>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold self-start sm:self-auto ${
+                                log.matched ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                              }`}>
+                                {log.matched ? 'MATCHED' : '404 NOT FOUND'}
+                              </span>
+                            </div>
+                          ))}
+                          {mockActivityLogs.length === 0 && (
+                            <div className="text-slate-500 italic text-center py-6 text-xs">
+                              No activity logs yet. Send a CoAP request to port {workspaceData.mockPort || 5683}.
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {mockConsoleLogs.map((item, idx) => (
+                            <div key={idx} className="border-b border-white/5 pb-2">
+                              <div className="flex items-center gap-2 text-[10px] text-slate-500 mb-1">
+                                <span>[{item.timestamp}]</span>
+                                <span className="text-indigo-400 font-semibold">{item.path}</span>
+                              </div>
+                              <div className="space-y-0.5 pl-2">
+                                {item.logs.map((logLine, lIdx) => (
+                                  <div key={lIdx} className={logLine.startsWith('[Script Error]') ? 'text-rose-400 font-bold' : 'text-indigo-200'}>
+                                    {logLine}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                          {mockConsoleLogs.length === 0 && (
+                            <div className="text-slate-500 italic text-center py-6 text-xs">
+                              No sandbox script console logs yet.
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
             ) : activeReqConfig ? (
               // 2. CENTRAL REQUEST CONFIG EDITOR
               <div className="flex-1 flex flex-col overflow-hidden">
@@ -1770,6 +2210,14 @@ export default function App() {
         onSubmit={handleAddEnvironment}
         title="Create Environment"
         placeholder="e.g. Production, Staging"
+      />
+
+      <InputModal
+        isOpen={isModalOpen && modalType === 'mockRoute'}
+        onClose={() => setIsModalOpen(false)}
+        onSubmit={handleAddMockRoute}
+        title="Create Mock Route"
+        placeholder="e.g. /hello"
       />
 
     </div>

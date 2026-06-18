@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog } from 'electron'
 import { join } from 'path'
 import { loadGlobalConfig, saveGlobalConfig, loadWorkspaceFromDir, saveWorkspaceToDir } from './storage.js'
 import { sendCoapRequest, startObserveStream, cancelRequest } from './coapEngine.js'
+import { startMockServer, stopMockServer, getMockServerStatus, updateMockServerRoutes } from './mockServer.js'
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
@@ -60,11 +61,21 @@ app.whenReady().then(() => {
     return cancelRequest(subId || requestId)
   })
 
+  // Mock Server IPC handlers
+  ipcMain.handle('mock-server:start', (event, { port, routes }) => startMockServer(port, routes, event.sender))
+  ipcMain.handle('mock-server:stop', () => stopMockServer())
+  ipcMain.handle('mock-server:status', () => getMockServerStatus())
+  ipcMain.handle('mock-server:update-routes', (_event, { routes }) => {
+    updateMockServerRoutes(routes)
+    return true
+  })
+
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
 
-app.on('window-all-closed', function () {
+app.on('window-all-closed', async function () {
+  await stopMockServer()
   if (process.platform !== 'darwin') app.quit()
 })

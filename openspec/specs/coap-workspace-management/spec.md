@@ -29,3 +29,9 @@ The system SHALL allow deleting a collection, which removes it along with all re
 - **WHEN** the user triggers deletion on a collection folder
 - **THEN** the collection and its nested requests are removed from the workspace structure and storage file.
 
+### Requirement: Mock Server Routes Persistence
+The system SHALL store mock server port and routes configuration inside the active workspace JSON tree configurations.
+
+#### Scenario: Workspace mock server routes save
+- **WHEN** the user adds or modifies routes or updates port configuration
+- **THEN** the configurations are serialized to `coap-workspace.json`.

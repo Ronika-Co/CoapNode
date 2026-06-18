@@ -17,7 +17,9 @@ const getInitialWorkspaceState = (name = 'New CoAP Workspace') => ({
   name: name,
   collections: [],
   environments: [],
-  activeEnvironmentId: ''
+  activeEnvironmentId: '',
+  mockPort: 5683,
+  mockRoutes: []
 })
 
 // Load global configuration

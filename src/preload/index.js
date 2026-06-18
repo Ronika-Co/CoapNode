@@ -33,5 +33,28 @@ contextBridge.exposeInMainWorld('api', {
       }
     },
     cancel: (requestId) => ipcRenderer.invoke('coap:cancel', { requestId })
+  },
+
+  // Mock Server API
+  mockServer: {
+    start: (port, routes) => ipcRenderer.invoke('mock-server:start', { port, routes }),
+    stop: () => ipcRenderer.invoke('mock-server:stop'),
+    status: () => ipcRenderer.invoke('mock-server:status'),
+    updateRoutes: (routes) => ipcRenderer.invoke('mock-server:update-routes', { routes }),
+    onRequestReceived: (onReceive) => {
+      const listener = (_event, arg) => onReceive(arg)
+      ipcRenderer.on('mock-server:request-received', listener)
+      return () => ipcRenderer.off('mock-server:request-received', listener)
+    },
+    onScriptLogs: (onLogs) => {
+      const listener = (_event, arg) => onLogs(arg)
+      ipcRenderer.on('mock-server:script-logs', listener)
+      return () => ipcRenderer.off('mock-server:script-logs', listener)
+    },
+    onError: (onErrorMsg) => {
+      const listener = (_event, arg) => onErrorMsg(arg)
+      ipcRenderer.on('mock-server:error', listener)
+      return () => ipcRenderer.off('mock-server:error', listener)
+    }
   }
 })

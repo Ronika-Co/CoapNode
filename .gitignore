@@ -2,6 +2,7 @@
 **/node_modules/**
 .gemini
 .agent
+.opencode
 out/
 dist/
 *.log

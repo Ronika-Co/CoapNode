@@ -409,10 +409,7 @@ export default function App() {
     return {
       ...config,
       url: resolveVariables(config.url),
-      queryParams: (config.queryParams || []).map(p => ({
-        key: resolveVariables(p.key),
-        value: resolveVariables(p.value)
-      })),
+      queryParams: [],
       headers,
       payload: resolveVariables(config.payload)
     }
@@ -769,7 +766,7 @@ export default function App() {
       const newParams = parseQueryParamsFromUrl(value)
       updatedConfig.queryParams = newParams
     }
-    
+
     setActiveReqConfig(updatedConfig)
 
     // Save tree structure
@@ -819,6 +816,7 @@ export default function App() {
     const resolvedConfig = interpolateRequestConfig(activeReqConfig)
 
     try {
+
       const res = await window.api.coap.send(resolvedConfig)
       setIsRequesting(false)
       if (res.success) {

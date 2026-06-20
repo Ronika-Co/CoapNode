@@ -8,7 +8,7 @@ const activeRequests = new Map()
 export function cancelRequest(subId) {
   const req = activeRequests.get(subId)
   if (req) {
-    req.abort()
+    req.end()
     activeRequests.delete(subId)
     return true
   }
@@ -44,7 +44,7 @@ export async function sendCoapRequest(config) {
 
     try {
       const url = new URL(requestConfig.url)
-      
+
       // Inject query parameters into the URL if defined in queryParams
       if (requestConfig.queryParams && requestConfig.queryParams.length > 0) {
         requestConfig.queryParams.forEach(({ key, value }) => {

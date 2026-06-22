@@ -1,6 +1,7 @@
 import coap from 'coap'
 import { URL } from 'url'
 import { runPreScript, runPostScript } from './scriptRunner.js'
+import { getMockServerStatus, getSharedAgent } from './mockServer.js'
 
 // Track active connections
 const activeRequests = new Map()
@@ -59,6 +60,14 @@ export async function sendCoapRequest(config) {
         query: url.search.substring(1), // Remove leading '?'
         method: requestConfig.method || 'GET',
         confirmable: true
+      }
+
+      if (requestConfig.bindToMockPort) {
+        const st = getMockServerStatus()
+        if (st.running) {
+          const agent = getSharedAgent()
+          if (agent) options.agent = agent
+        }
       }
 
       const req = coap.request(options)
@@ -161,6 +170,14 @@ export function startObserveStream(config, subId, webContents) {
       query: url.search.substring(1),
       method: 'GET',
       observe: true
+    }
+
+    if (config.bindToMockPort) {
+      const st = getMockServerStatus()
+      if (st.running) {
+        const agent = getSharedAgent()
+        if (agent) options.agent = agent
+      }
     }
 
     const req = coap.request(options)

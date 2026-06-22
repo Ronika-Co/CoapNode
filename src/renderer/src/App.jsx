@@ -75,6 +75,7 @@ export default function App() {
   const [isRequesting, setIsRequesting] = useState(false)
   const [isObserving, setIsObserving] = useState(false)
   const [observeTeardown, setObserveTeardown] = useState(null)
+  const [bindToMockPort, setBindToMockPort] = useState(false)
 
   // Floating hover variables tooltip state
   const [tooltip, setTooltip] = useState({ show: false, text: '', x: 0, y: 0, isError: false })
@@ -817,7 +818,7 @@ export default function App() {
 
     try {
 
-      const res = await window.api.coap.send(resolvedConfig)
+      const res = await window.api.coap.send({ ...resolvedConfig, bindToMockPort })
       setIsRequesting(false)
       if (res.success) {
         setResponse(res.response)
@@ -853,7 +854,7 @@ export default function App() {
     const resolvedConfig = interpolateRequestConfig(activeReqConfig)
 
     try {
-      const teardown = window.api.coap.observe(resolvedConfig, (update) => {
+      const teardown = window.api.coap.observe({ ...resolvedConfig, bindToMockPort }, (update) => {
         if (update.type === 'message') {
           setObserveLogs(prev => [update.response, ...prev])
           if (update.logs && update.logs.length > 0) {
@@ -1558,6 +1559,30 @@ console.log('Processed request: ' + request.payload);`}
                       </option>
                     ))}
                   </select>
+
+                  {/* Bind to Mock Port Toggle */}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <input
+                      type="checkbox"
+                      id="bind-mock"
+                      checked={bindToMockPort}
+                      onChange={(e) => setBindToMockPort(e.target.checked)}
+                      disabled={!isMockRunning}
+                      className="accent-indigo-500 cursor-pointer"
+                    />
+                    <label
+                      htmlFor="bind-mock"
+                      className={`text-xs font-medium whitespace-nowrap cursor-pointer select-none transition ${
+                        isMockRunning
+                          ? bindToMockPort
+                            ? 'text-emerald-400'
+                            : 'text-slate-400'
+                          : 'text-slate-600'
+                      }`}
+                    >
+                      Bind mock{isMockRunning ? ` (${workspaceData?.mockPort || 5683})` : ''}
+                    </label>
+                  </div>
 
                   {/* Action Buttons */}
                   {isRequesting ? (

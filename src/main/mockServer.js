@@ -1,9 +1,16 @@
 import coap from 'coap'
+import dgram from 'dgram'
 import vm from 'vm'
 
 let server = null
 let runningPort = null
 let activeRoutes = []
+let sharedSocket = null
+let sharedAgent = null
+
+export function getSharedAgent() {
+  return sharedAgent
+}
 
 export function startMockServer(port, routes, webContents) {
   return new Promise((resolve, reject) => {
@@ -12,30 +19,36 @@ export function startMockServer(port, routes, webContents) {
     }
 
     try {
-      server = coap.createServer()
-      activeRoutes = routes || []
-      runningPort = port
+      sharedSocket = dgram.createSocket({ type: 'udp4', reuseAddr: true })
 
-      server.on('request', (req, res) => {
-        handleIncomingRequest(req, res, webContents)
-      })
-
-      server.listen(port, () => {
-        console.log(`CoAP Mock Server listening on port ${port}`)
-        resolve({ port })
-      })
-
-      server.on('error', (err) => {
-        server = null
-        runningPort = null
-        console.error('CoAP Mock Server error:', err)
+      sharedSocket.on('error', (err) => {
+        console.error('Mock server socket error:', err)
         webContents.send('mock-server:error', err.message)
-        reject(err)
+      })
+
+      sharedSocket.bind(port, () => {
+        server = coap.createServer()
+        activeRoutes = routes || []
+        runningPort = port
+
+        server.on('request', (req, res) => {
+          handleIncomingRequest(req, res, webContents)
+        })
+
+        server.listen(sharedSocket, () => {
+          sharedAgent = new coap.Agent({ socket: sharedSocket })
+          console.log(`CoAP Mock Server listening on port ${port}`)
+          resolve({ port })
+        })
+
+        server.on('error', (err) => {
+          console.error('CoAP Mock Server error:', err)
+          webContents.send('mock-server:error', err.message)
+        })
       })
 
     } catch (err) {
-      server = null
-      runningPort = null
+      cleanupSocketResources()
       reject(err)
     }
   })
@@ -44,15 +57,28 @@ export function startMockServer(port, routes, webContents) {
 export function stopMockServer() {
   return new Promise((resolve) => {
     if (!server) {
+      cleanupSocketResources()
       return resolve(true)
     }
 
     server.close(() => {
-      server = null
-      runningPort = null
+      cleanupSocketResources()
       resolve(true)
     })
   })
+}
+
+function cleanupSocketResources() {
+  if (sharedAgent) {
+    try { sharedAgent.close() } catch (e) {}
+    sharedAgent = null
+  }
+  if (sharedSocket) {
+    try { sharedSocket.close() } catch (e) {}
+    sharedSocket = null
+  }
+  server = null
+  runningPort = null
 }
 
 export function getMockServerStatus() {

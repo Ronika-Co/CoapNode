@@ -4,6 +4,7 @@ import { javascript } from '@codemirror/lang-javascript'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { autocompletion } from '@codemirror/autocomplete'
 import { linter } from '@codemirror/lint'
+import { json, jsonParseLinter } from '@codemirror/lang-json'
 
 // Custom Dialog/Modal Component to replace window.prompt()
 function InputModal({ isOpen, onClose, onSubmit, title, placeholder, initialValue = '' }) {
@@ -380,15 +381,6 @@ export default function App() {
       const found = (activeEnv.variables || []).find(v => v.key === varName)
       return found ? found.value : match
     })
-  }
-
-  const isValidJson = (str) => {
-    try {
-      JSON.parse(str)
-      return true
-    } catch (e) {
-      return false
-    }
   }
 
   const safeEncode = (str) => {
@@ -1927,31 +1919,33 @@ console.log('Processed request: ' + request.payload);`}
                               </button>
                             </div>
                           </div>
-                          
+
                           <div className="flex-1 flex flex-col relative min-h-0">
-                            <textarea
-                              value={activeReqConfig.payload || ''}
-                              data-field-type="payload"
-                              onChange={(e) => {
-                                handleUpdateReqField('payload', e.target.value)
-                                handleInputHover(e, e.target.value)
-                                checkAutocompleteTrigger(e, e.target.value)
-                              }}
-                              onKeyDown={handleInputKeyDown}
-                              onMouseEnter={(e) => handleInputHover(e, activeReqConfig.payload)}
-                              onMouseLeave={() => setTooltip({ show: false, text: '', x: 0, y: 0, isError: false })}
-                              placeholder={activeReqConfig.payloadType === 'json' ? '{\n  "key": "value"\n}' : 'Raw text payload to send (POST/PUT)...'}
-                              className={`flex-grow w-full bg-slate-950 border rounded-lg p-3 text-xs text-slate-200 outline-none font-mono resize-none h-full overflow-y-auto ${
-                                activeReqConfig.payloadType === 'json' && activeReqConfig.payload && !isValidJson(activeReqConfig.payload)
-                                  ? 'border-rose-500/50 focus:border-rose-500'
-                                  : 'border-white/10 focus:border-indigo-500/50'
-                              }`}
-                            />
-                            
-                            {activeReqConfig.payloadType === 'json' && activeReqConfig.payload && !isValidJson(activeReqConfig.payload) && (
-                              <div className="absolute bottom-2 right-2 px-2 py-0.5 bg-rose-950 border border-rose-500/30 text-rose-400 text-[9px] rounded font-mono">
-                                Invalid JSON format
-                              </div>
+                            {activeReqConfig.payloadType === 'json' ? (
+                              <CodeMirror
+                                value={activeReqConfig.payload || ''}
+                                onChange={(val) => handleUpdateReqField('payload', val)}
+                                extensions={[json(), linter(jsonParseLinter())]}
+                                theme={oneDark}
+                                height="100%"
+                                basicSetup={{ lineNumbers: true, foldGutter: false }}
+                                placeholder='{\n  "key": "value"\n}'
+                              />
+                            ) : (
+                              <textarea
+                                value={activeReqConfig.payload || ''}
+                                data-field-type="payload"
+                                onChange={(e) => {
+                                  handleUpdateReqField('payload', e.target.value)
+                                  handleInputHover(e, e.target.value)
+                                  checkAutocompleteTrigger(e, e.target.value)
+                                }}
+                                onKeyDown={handleInputKeyDown}
+                                onMouseEnter={(e) => handleInputHover(e, activeReqConfig.payload)}
+                                onMouseLeave={() => setTooltip({ show: false, text: '', x: 0, y: 0, isError: false })}
+                                placeholder="Raw text payload to send (POST/PUT)..."
+                                className="flex-grow w-full bg-slate-950 border border-white/10 rounded-lg p-3 text-xs text-slate-200 outline-none font-mono resize-none h-full overflow-y-auto focus:border-indigo-500/50"
+                              />
                             )}
                           </div>
                         </div>

@@ -654,6 +654,27 @@ export default function App() {
     await window.api.storage.saveConfig(updatedConfig)
   }
 
+  // Switch to a different workspace without first going through the landing screen
+  const handleSwitchWorkspace = async () => {
+    const dirPath = await window.api.storage.selectDirectory()
+    if (!dirPath) return
+
+    // Teardown current workspace (same cleanup as handleCloseWorkspace)
+    tabs.forEach(t => {
+      if (t.observeTeardown) {
+        try { t.observeTeardown() } catch (e) {}
+      }
+    })
+    tabs.forEach(t => closeTab(t.id))
+    setIsMockRunning(false)
+    setMockActivityLogs([])
+    setLandingError('')
+    await window.api.mockServer.stop()
+
+    // Load the new workspace (updates state, config, recent paths)
+    await handleOpenWorkspace(dirPath)
+  }
+
   // Clear recents
   const handleClearRecents = async () => {
     const updatedConfig = {
@@ -1190,14 +1211,23 @@ export default function App() {
               {/* Workspace info & close button */}
               <div className="p-4 border-b border-white/5 flex flex-col gap-2">
                 <div className="flex justify-between items-center">
-                  <label className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Workspace Directory</label>
-                  <button
-                    onClick={handleCloseWorkspace}
-                    className="flex items-center gap-1 text-xs text-rose-400 hover:text-rose-300 font-medium"
-                    title="Close workspace folder"
-                  >
-                    <span className="text-[10px]">×</span> Close
-                  </button>
+                  <label className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Workspace</label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleSwitchWorkspace}
+                      className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 font-medium"
+                      title="Open or create a different workspace"
+                    >
+                      Open
+                    </button>
+                    <button
+                      onClick={handleCloseWorkspace}
+                      className="flex items-center gap-1 text-xs text-rose-400 hover:text-rose-300 font-medium"
+                      title="Close workspace folder"
+                    >
+                      <span className="text-[10px]">×</span> Close
+                    </button>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg p-2 text-sm text-slate-200 outline-none w-full">
                   <span className="text-indigo-400 font-semibold">📁</span>

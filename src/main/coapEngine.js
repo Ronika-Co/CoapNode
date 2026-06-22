@@ -29,7 +29,15 @@ function configureOptions(req, headers) {
       }
       req.setOption(key, val)
     } catch (e) {
-      console.error(`Failed to set CoAP option ${key}:`, e.message)
+      if (e.message && /unknown string to buffer converter/i.test(e.message) && typeof value === 'string') {
+        try {
+          req.setOption(key, Buffer.from(value))
+        } catch (e2) {
+          console.error(`Failed to set CoAP option ${key}:`, e2.message)
+        }
+      } else {
+        console.error(`Failed to set CoAP option ${key}:`, e.message)
+      }
     }
   })
 }

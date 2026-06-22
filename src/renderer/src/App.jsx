@@ -197,6 +197,35 @@ const mockRouteExtensions = [
   linter(createSandboxLinter(mockRouteApi)),
 ]
 
+const COAP_OPTIONS = [
+  { num: 1, name: 'If-Match' },
+  { num: 3, name: 'Uri-Host' },
+  { num: 4, name: 'ETag' },
+  { num: 5, name: 'If-None-Match' },
+  { num: 6, name: 'Observe' },
+  { num: 7, name: 'Uri-Port' },
+  { num: 8, name: 'Location-Path' },
+  { num: 9, name: 'OSCORE' },
+  { num: 11, name: 'Uri-Path' },
+  { num: 12, name: 'Content-Format' },
+  { num: 14, name: 'Max-Age' },
+  { num: 15, name: 'Uri-Query' },
+  { num: 16, name: 'Hop-Limit' },
+  { num: 17, name: 'Accept' },
+  { num: 19, name: 'Q-Block1' },
+  { num: 20, name: 'Location-Query' },
+  { num: 23, name: 'Block2' },
+  { num: 27, name: 'Block1' },
+  { num: 28, name: 'Size2' },
+  { num: 31, name: 'Q-Block2' },
+  { num: 35, name: 'Proxy-Uri' },
+  { num: 39, name: 'Proxy-Scheme' },
+  { num: 60, name: 'Size1' },
+  { num: 258, name: 'No-Response' },
+  { num: 2049, name: 'OCF-Accept-Content-Format-Version' },
+  { num: 2053, name: 'OCF-Content-Format-Version' },
+]
+
 export default function App() {
   // Global configuration
   const [globalConfig, setGlobalConfig] = useState({ lastWorkspacePath: '', recentPaths: [] })
@@ -1825,7 +1854,7 @@ console.log('Processed request: ' + request.payload);`}
                       )}
 
                       {/* Options Table */}
-                      {requestTab === 'options' && (
+                       {requestTab === 'options' && (
                         <div>
                           <div className="flex justify-between items-center mb-3">
                             <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Custom CoAP Options</label>
@@ -1840,23 +1869,21 @@ console.log('Processed request: ' + request.payload);`}
                           <div className="space-y-2">
                             {activeReqConfig.headers?.map((row, idx) => (
                               <div key={idx} className="flex gap-2 items-center">
-                                <input
-                                  type="text"
-                                  value={row.key}
-                                  data-field-type="headers"
-                                  data-row-index={idx}
-                                  data-field-key="key"
-                                  onChange={(e) => {
-                                    handleUpdateRow('headers', idx, 'key', e.target.value)
-                                    handleInputHover(e, e.target.value)
-                                    checkAutocompleteTrigger(e, e.target.value)
-                                  }}
-                                  onKeyDown={handleInputKeyDown}
-                                  onMouseEnter={(e) => handleInputHover(e, row.key)}
-                                  onMouseLeave={() => setTooltip({ show: false, text: '', x: 0, y: 0, isError: false })}
-                                  placeholder="e.g. Content-Format"
-                                  className="flex-1 bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500/40 font-mono"
-                                />
+                                <div className="flex-1 relative">
+                                  <input
+                                    type="text"
+                                    value={row.key}
+                                    list="coap-option-names"
+                                    onChange={(e) => handleUpdateRow('headers', idx, 'key', e.target.value)}
+                                    placeholder="Select or type option..."
+                                    className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500/40 font-mono"
+                                  />
+                                  <datalist id="coap-option-names">
+                                    {COAP_OPTIONS.map(opt => (
+                                      <option key={opt.num} value={opt.name} />
+                                    ))}
+                                  </datalist>
+                                </div>
                                 <input
                                   type="text"
                                   value={row.value}

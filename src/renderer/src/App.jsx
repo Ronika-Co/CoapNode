@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from 'react'
+import CodeMirror from '@uiw/react-codemirror'
+import { javascript } from '@codemirror/lang-javascript'
+import { oneDark } from '@codemirror/theme-one-dark'
 
 // Custom Dialog/Modal Component to replace window.prompt()
 function InputModal({ isOpen, onClose, onSubmit, title, placeholder, initialValue = '' }) {
@@ -107,13 +110,7 @@ export default function App() {
   const [isResizingSidebar, setIsResizingSidebar] = useState(false)
   const [isResizingRequest, setIsResizingRequest] = useState(false)
 
-  // Gutters refs for script scroll sync
-  const preScriptGutterRef = React.useRef(null)
-  const preScriptTextareaRef = React.useRef(null)
-  const postScriptGutterRef = React.useRef(null)
-  const postScriptTextareaRef = React.useRef(null)
-  const mockRouteScriptGutterRef = React.useRef(null)
-  const mockRouteScriptTextareaRef = React.useRef(null)
+  // Variables Autocomplete state
 
   // Variables Autocomplete state
   const [suggestion, setSuggestion] = useState({
@@ -1338,33 +1335,15 @@ export default function App() {
                           <div className="flex-1 flex flex-col p-4 overflow-hidden min-h-0">
                             <label className="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-2">Sandbox Handler Script (NodeJS)</label>
                             
-                            <div className="flex-grow flex bg-slate-950 border border-white/10 rounded-xl overflow-hidden font-mono text-xs relative h-full">
-                              {/* Gutter scroll synced */}
-                              <div 
-                                ref={mockRouteScriptGutterRef}
-                                className="w-10 bg-slate-900/60 border-r border-white/5 py-3 pr-2 text-right text-slate-600 select-none overflow-y-hidden text-[11px]"
-                                style={{ lineHeight: '20px' }}
-                              >
-                                {Array.from({ length: (activeRoute.script || '').split('\n').length || 1 }).map((_, idx) => (
-                                  <div key={idx} className="h-5">{idx + 1}</div>
-                                ))}
-                              </div>
-                              <textarea
-                                ref={mockRouteScriptTextareaRef}
+                            <div className="flex-grow overflow-hidden border border-white/10 rounded-xl">
+                              <CodeMirror
                                 value={activeRoute.script || ''}
-                                onChange={(e) => {
-                                  handleUpdateMockRoute(activeRoute.id, { script: e.target.value })
-                                  checkAutocompleteTrigger(e, e.target.value)
-                                }}
-                                onKeyDown={handleInputKeyDown}
-                                onScroll={(e) => {
-                                  if (mockRouteScriptGutterRef.current) {
-                                    mockRouteScriptGutterRef.current.scrollTop = e.target.scrollTop
-                                  }
-                                }}
-                                placeholder="// Write custom mock response script here...&#10;response.code = '2.05';&#10;response.payload = JSON.stringify({ hello: 'world' });"
-                                className="flex-grow py-3 px-3 bg-transparent outline-none text-indigo-200 resize-none h-full overflow-y-auto leading-5"
-                                style={{ lineHeight: '20px', fontFamily: 'monospace' }}
+                                onChange={(val) => handleUpdateMockRoute(activeRoute.id, { script: val })}
+                                extensions={[javascript()]}
+                                theme={oneDark}
+                                height="100%"
+                                basicSetup={{ lineNumbers: true, foldGutter: false, autocompletion: false }}
+                                placeholder="// Write custom mock response script here..."
                               />
                             </div>
                           </div>
@@ -1851,33 +1830,15 @@ console.log('Processed request: ' + request.payload);`}
                           </div>
                           
                           <div className="flex-1 flex flex-col md:flex-row gap-3 overflow-hidden min-h-0">
-                            <div className="flex-1 flex bg-slate-950 border border-white/10 rounded-lg overflow-hidden font-mono text-xs relative h-full">
-                              {/* Gutter scroll synced */}
-                              <div 
-                                ref={preScriptGutterRef}
-                                className="w-10 bg-slate-900/60 border-r border-white/5 py-3 pr-2 text-right text-slate-600 select-none overflow-y-hidden text-[11px]"
-                                style={{ lineHeight: '20px' }}
-                              >
-                                {Array.from({ length: (activeReqConfig.preScript || '').split('\n').length || 1 }).map((_, idx) => (
-                                  <div key={idx} className="h-5">{idx + 1}</div>
-                                ))}
-                              </div>
-                              <textarea
-                                ref={preScriptTextareaRef}
+                            <div className="flex-1 overflow-hidden border border-white/10 rounded-lg">
+                              <CodeMirror
                                 value={activeReqConfig.preScript || ''}
-                                onChange={(e) => {
-                                  handleUpdateReqField('preScript', e.target.value)
-                                  checkAutocompleteTrigger(e, e.target.value)
-                                }}
-                                onKeyDown={handleInputKeyDown}
-                                onScroll={(e) => {
-                                  if (preScriptGutterRef.current) {
-                                    preScriptGutterRef.current.scrollTop = e.target.scrollTop
-                                  }
-                                }}
-                                placeholder="// Write pre-request script here...&#10;request.payload = 'mutated payload';"
-                                className="flex-grow py-3 px-3 bg-transparent outline-none text-indigo-200 resize-none h-full overflow-y-auto leading-5"
-                                style={{ lineHeight: '20px', fontFamily: 'monospace' }}
+                                onChange={(val) => handleUpdateReqField('preScript', val)}
+                                extensions={[javascript()]}
+                                theme={oneDark}
+                                height="100%"
+                                basicSetup={{ lineNumbers: true, foldGutter: false, autocompletion: false }}
+                                placeholder="// Write pre-request script here..."
                               />
                             </div>
                             
@@ -1909,33 +1870,15 @@ console.log('Processed request: ' + request.payload);`}
                           </div>
                           
                           <div className="flex-1 flex flex-col md:flex-row gap-3 overflow-hidden min-h-0">
-                            <div className="flex-1 flex bg-slate-950 border border-white/10 rounded-lg overflow-hidden font-mono text-xs relative h-full">
-                              {/* Gutter scroll synced */}
-                              <div 
-                                ref={postScriptGutterRef}
-                                className="w-10 bg-slate-900/60 border-r border-white/5 py-3 pr-2 text-right text-slate-600 select-none overflow-y-hidden text-[11px]"
-                                style={{ lineHeight: '20px' }}
-                              >
-                                {Array.from({ length: (activeReqConfig.postScript || '').split('\n').length || 1 }).map((_, idx) => (
-                                  <div key={idx} className="h-5">{idx + 1}</div>
-                                ))}
-                              </div>
-                              <textarea
-                                ref={postScriptTextareaRef}
+                            <div className="flex-1 overflow-hidden border border-white/10 rounded-lg">
+                              <CodeMirror
                                 value={activeReqConfig.postScript || ''}
-                                onChange={(e) => {
-                                  handleUpdateReqField('postScript', e.target.value)
-                                  checkAutocompleteTrigger(e, e.target.value)
-                                }}
-                                onKeyDown={handleInputKeyDown}
-                                onScroll={(e) => {
-                                  if (postScriptGutterRef.current) {
-                                    postScriptGutterRef.current.scrollTop = e.target.scrollTop
-                                  }
-                                }}
-                                placeholder="// Write post-request script here...&#10;console.log('Status: ' + response.code);"
-                                className="flex-grow py-3 px-3 bg-transparent outline-none text-indigo-200 resize-none h-full overflow-y-auto leading-5"
-                                style={{ lineHeight: '20px', fontFamily: 'monospace' }}
+                                onChange={(val) => handleUpdateReqField('postScript', val)}
+                                extensions={[javascript()]}
+                                theme={oneDark}
+                                height="100%"
+                                basicSetup={{ lineNumbers: true, foldGutter: false, autocompletion: false }}
+                                placeholder="// Write post-request script here..."
                               />
                             </div>
                             

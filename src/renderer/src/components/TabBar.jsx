@@ -53,10 +53,10 @@ export default function TabBar() {
             <span className="text-[9px] text-slate-500 ml-auto hidden sm:inline">{TAB_TYPE_LABELS[tab.type]}</span>
             <button
               onClick={(e) => { e.stopPropagation(); closeTab(tab.id) }}
-              className={`flex-shrink-0 ml-1 w-4 h-4 flex items-center justify-center rounded text-[10px] transition
+              className={`flex-shrink-0 ml-1 w-4 h-4 flex items-center justify-center rounded text-[10px] transition-all duration-200
                 ${tab.id === activeTabId
                   ? 'text-slate-400 hover:text-slate-100 hover:bg-white/10'
-                  : 'text-transparent group-hover:text-slate-500 hover:text-slate-300 hover:bg-white/10'
+                  : 'opacity-0 group-hover:opacity-100 text-slate-500 hover:text-slate-300 hover:bg-white/10'
                 }`}
               title="Close tab"
             >

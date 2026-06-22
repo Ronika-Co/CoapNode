@@ -1193,10 +1193,10 @@ export default function App() {
                   <label className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Workspace Directory</label>
                   <button
                     onClick={handleCloseWorkspace}
-                    className="text-xs text-rose-400 hover:text-rose-300 font-medium"
+                    className="flex items-center gap-1 text-xs text-rose-400 hover:text-rose-300 font-medium"
                     title="Close workspace folder"
                   >
-                    Close
+                    <span className="text-[10px]">×</span> Close
                   </button>
                 </div>
                 <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg p-2 text-sm text-slate-200 outline-none w-full">
@@ -1215,7 +1215,7 @@ export default function App() {
                       <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Folders</span>
                       <button
                         onClick={() => openInputModal('collection', '')}
-                        className="text-xs bg-white/5 border border-white/10 px-2.5 py-1 rounded hover:bg-white/10 transition text-slate-300"
+                        className="text-xs bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20 px-2.5 py-1 rounded-md transition flex items-center gap-1"
                       >
                         + Folder
                       </button>
@@ -1231,16 +1231,16 @@ export default function App() {
                           <div className="flex items-center gap-1.5 flex-shrink-0">
                             <button
                               onClick={() => openInputModal('request', col.id)}
-                              className="opacity-0 group-hover:opacity-100 text-[10px] text-indigo-400 hover:text-indigo-300 transition"
+                              className="opacity-40 group-hover:opacity-100 transition-all duration-200 text-[10px] bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20 px-2 py-0.5 rounded"
                             >
                               + Req
                             </button>
                             <button
                               onClick={() => handleDeleteCollection(col.id)}
-                              className="opacity-0 group-hover:opacity-100 text-rose-500 hover:text-rose-400 text-xs transition px-1"
+                              className="opacity-40 group-hover:opacity-100 transition-all duration-200 flex-shrink-0 w-5 h-5 flex items-center justify-center rounded text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 text-xs"
                               title="Delete collection folder and nested requests"
                             >
-                              🗑️
+                              ×
                             </button>
                           </div>
                         </div>
@@ -1268,9 +1268,9 @@ export default function App() {
                                   e.stopPropagation()
                                   handleDeleteRequest(col.id, req.id)
                                 }}
-                                className="opacity-0 group-hover:opacity-100 text-rose-500 hover:text-rose-400 text-sm"
+                                className="opacity-40 group-hover:opacity-100 transition-all duration-200 flex-shrink-0 w-5 h-5 flex items-center justify-center rounded text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 text-xs"
                               >
-                                &times;
+                                ×
                               </button>
                             </li>
                           ))}
@@ -1293,7 +1293,7 @@ export default function App() {
                       <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Environments</span>
                       <button
                         onClick={() => openInputModal('env', '')}
-                        className="text-xs bg-white/5 border border-white/10 px-2.5 py-1 rounded hover:bg-white/10 transition text-slate-300"
+                        className="text-xs bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20 px-2.5 py-1 rounded-md transition flex items-center gap-1"
                       >
                         + Env
                       </button>
@@ -1320,9 +1320,9 @@ export default function App() {
                               e.stopPropagation()
                               handleDeleteEnvironment(env.id)
                             }}
-                            className="opacity-0 group-hover:opacity-100 text-rose-500 hover:text-rose-400 text-sm"
+                            className="opacity-40 group-hover:opacity-100 transition-all duration-200 flex-shrink-0 w-5 h-5 flex items-center justify-center rounded text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 text-xs"
                           >
-                            &times;
+                            ×
                           </button>
                         </div>
                       ))}
@@ -1343,7 +1343,7 @@ export default function App() {
                       <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Mock Routes</span>
                       <button
                         onClick={() => openInputModal('mockRoute', '')}
-                        className="text-xs bg-white/5 border border-white/10 px-2.5 py-1 rounded hover:bg-white/10 transition text-slate-300"
+                        className="text-xs bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20 px-2.5 py-1 rounded-md transition flex items-center gap-1"
                       >
                         + Route
                       </button>
@@ -1372,9 +1372,9 @@ export default function App() {
                               e.stopPropagation()
                               handleDeleteMockRoute(route.id)
                             }}
-                            className="opacity-0 group-hover:opacity-100 text-rose-500 hover:text-rose-400 text-sm font-bold"
+                            className="opacity-40 group-hover:opacity-100 transition-all duration-200 flex-shrink-0 w-5 h-5 flex items-center justify-center rounded text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 text-xs"
                           >
-                            &times;
+                            ×
                           </button>
                         </div>
                       ))}
@@ -1520,9 +1520,9 @@ export default function App() {
                   <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">Recent Locations</span>
                   <button
                     onClick={handleClearRecents}
-                    className="text-[10px] text-rose-400 hover:text-rose-300 font-medium"
+                    className="text-[10px] bg-white/5 border border-white/10 px-2 py-0.5 rounded hover:bg-white/10 transition text-rose-400 hover:text-rose-300 font-semibold flex items-center gap-1"
                   >
-                    Clear Recents
+                    × Clear Recents
                   </button>
                 </div>
                 <div className="space-y-1.5 max-h-40 overflow-y-auto">
@@ -1807,7 +1807,7 @@ function TabRequestPanel({
                   <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">URI Query Parameters</label>
                   <button
                     onClick={() => onAddRow('queryParams')}
-                    className="text-xs bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20 px-2 py-1 rounded transition"
+                    className="text-xs bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20 px-2.5 py-1 rounded-md transition flex items-center gap-1"
                   >
                     + Add Param
                   </button>
@@ -1852,9 +1852,9 @@ function TabRequestPanel({
                       />
                       <button
                         onClick={() => onDeleteRow('queryParams', idx)}
-                        className="text-rose-500 hover:text-rose-400 text-lg px-1"
+                        className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 text-sm transition"
                       >
-                        &times;
+                        ×
                       </button>
                     </div>
                   ))}
@@ -1874,7 +1874,7 @@ function TabRequestPanel({
                   <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Custom CoAP Options</label>
                   <button
                     onClick={() => onAddRow('headers')}
-                    className="text-xs bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20 px-2 py-1 rounded transition"
+                    className="text-xs bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20 px-2.5 py-1 rounded-md transition flex items-center gap-1"
                   >
                     + Add Option
                   </button>
@@ -1914,9 +1914,9 @@ function TabRequestPanel({
                       />
                       <button
                         onClick={() => onDeleteRow('headers', idx)}
-                        className="text-rose-500 hover:text-rose-400 text-lg px-1"
+                        className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 text-sm transition"
                       >
-                        &times;
+                        ×
                       </button>
                     </div>
                   ))}
@@ -2289,7 +2289,7 @@ function TabEnvironmentPanel({ environment, onAddVariable, onUpdateVariable, onD
         </div>
         <button
           onClick={() => onAddVariable(environment.id)}
-          className="text-xs bg-indigo-600 hover:bg-indigo-500 font-semibold px-4 py-2 rounded-xl text-white shadow-lg transition"
+          className="text-xs bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20 font-semibold px-4 py-2 rounded-xl transition flex items-center gap-1.5"
         >
           + Add Variable
         </button>
@@ -2314,9 +2314,9 @@ function TabEnvironmentPanel({ environment, onAddVariable, onUpdateVariable, onD
             />
             <button
               onClick={() => onDeleteVariable(environment.id, index)}
-              className="text-rose-500 hover:text-rose-400 text-lg px-2"
+              className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 text-sm transition"
             >
-              &times;
+              ×
             </button>
           </div>
         ))}
@@ -2429,9 +2429,9 @@ function TabMockConfigPanel({
             <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Request Activity</h3>
             <button
               onClick={onClearActivityLogs}
-              className="text-[10px] bg-white/5 border border-white/10 px-2.5 py-1 rounded hover:bg-white/10 transition text-slate-300 font-semibold"
+              className="text-[10px] bg-white/5 border border-white/10 px-2.5 py-1 rounded hover:bg-white/10 transition text-slate-300 font-semibold flex items-center gap-1"
             >
-              Clear
+              × Clear
             </button>
           </div>
           <div className="flex-grow overflow-y-auto p-4 font-mono text-xs min-h-0">
@@ -2472,9 +2472,9 @@ function TabMockConfigPanel({
             <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Script Console Logs</h3>
             <button
               onClick={onClearConsoleLogs}
-              className="text-[10px] bg-white/5 border border-white/10 px-2.5 py-1 rounded hover:bg-white/10 transition text-slate-300 font-semibold"
+              className="text-[10px] bg-white/5 border border-white/10 px-2.5 py-1 rounded hover:bg-white/10 transition text-slate-300 font-semibold flex items-center gap-1"
             >
-              Clear
+              × Clear
             </button>
           </div>
 
@@ -2655,9 +2655,9 @@ console.log('Processed request: ' + request.payload);`}
             </div>
             <button
               onClick={() => onUpdateTabState({ mockConsoleLogs: [] })}
-              className="text-[10px] bg-white/5 border border-white/10 px-2.5 py-1 rounded hover:bg-white/10 transition text-slate-300 font-semibold"
+              className="text-[10px] bg-white/5 border border-white/10 px-2.5 py-1 rounded hover:bg-white/10 transition text-slate-300 font-semibold flex items-center gap-1"
             >
-              Clear
+              × Clear
             </button>
           </div>
 

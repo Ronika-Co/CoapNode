@@ -189,6 +189,7 @@ function handleIncomingRequest(req, res, webContents) {
         webContents.send('mock-server:script-logs', {
           timestamp,
           path,
+          routeId: matchingRoute.id,
           logs
         })
       }
@@ -200,6 +201,7 @@ function handleIncomingRequest(req, res, webContents) {
       webContents.send('mock-server:script-logs', {
         timestamp,
         path,
+        routeId: matchingRoute.id,
         logs: [`[Script Error] ${e.message}`]
       })
       res.code = '5.00'

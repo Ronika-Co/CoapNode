@@ -1108,6 +1108,43 @@ export default function App() {
       {workspaceData ? (
         // ACTIVE WORKSPACE VIEW
         <>
+          {/* ACTIVITY BAR */}
+          <div className="w-12 flex-shrink-0 border-r border-white/5 bg-slate-950/90 flex flex-col items-center py-3 gap-3 z-10">
+            <button
+              onClick={() => setSidebarTab('collections')}
+              className={`w-9 h-9 flex items-center justify-center rounded-lg text-lg transition ${
+                sidebarTab === 'collections'
+                  ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30'
+                  : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+              }`}
+              title="Collections"
+            >
+              📁
+            </button>
+            <button
+              onClick={() => setSidebarTab('environments')}
+              className={`w-9 h-9 flex items-center justify-center rounded-lg text-lg transition ${
+                sidebarTab === 'environments'
+                  ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30'
+                  : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+              }`}
+              title="Environments"
+            >
+              🌱
+            </button>
+            <button
+              onClick={() => setSidebarTab('mock')}
+              className={`w-9 h-9 flex items-center justify-center rounded-lg text-lg transition ${
+                sidebarTab === 'mock'
+                  ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30'
+                  : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+              }`}
+              title="Mock Server"
+            >
+              🛠️
+            </button>
+          </div>
+
           {/* LEFT SIDEBAR: explorer */}
           <aside style={{ width: sidebarWidth }} className="relative border-r border-white/5 bg-slate-950/80 flex flex-col justify-between flex-shrink-0">
             {/* Vertical Sidebar drag resizer divider */}
@@ -1133,40 +1170,6 @@ export default function App() {
                   <span className="text-indigo-400 font-semibold">📁</span>
                   <span className="truncate" title={activeWorkspacePath}>{workspaceData.name}</span>
                 </div>
-              </div>
-
-              {/* Sidebar Tabs: Collections vs Environments vs Mock Server */}
-              <div className="flex border-b border-white/5 bg-slate-950/40 text-xs font-semibold">
-                <button
-                  onClick={() => setSidebarTab('collections')}
-                  className={`flex-1 py-3 text-center border-b-2 transition ${
-                    sidebarTab === 'collections'
-                      ? 'border-indigo-500 text-slate-100 bg-white/[0.01]'
-                      : 'border-transparent text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  Collections
-                </button>
-                <button
-                  onClick={() => setSidebarTab('environments')}
-                  className={`flex-1 py-3 text-center border-b-2 transition ${
-                    sidebarTab === 'environments'
-                      ? 'border-indigo-500 text-slate-100 bg-white/[0.01]'
-                      : 'border-transparent text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  Environments
-                </button>
-                <button
-                  onClick={() => setSidebarTab('mock')}
-                  className={`flex-1 py-3 text-center border-b-2 transition ${
-                    sidebarTab === 'mock'
-                      ? 'border-indigo-500 text-slate-100 bg-white/[0.01]'
-                      : 'border-transparent text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  Mock Server
-                </button>
               </div>
 
               {/* Sidebar Tab Contents */}
@@ -1356,7 +1359,7 @@ export default function App() {
             </div>
 
             <div className="p-4 border-t border-white/5 text-xs text-slate-500 text-center">
-              CoapNode v1.0.0 &bull; Local Client
+              CoapNode v1.0.0 &bull;
             </div>
           </aside>
 

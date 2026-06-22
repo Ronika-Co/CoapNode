@@ -99,7 +99,7 @@ export async function sendCoapRequest(config) {
           // Parse CoAP response options
           const resOptions = res.options.map(opt => ({
             key: opt.name,
-            value: opt.value.toString()
+            value: opt.value == null ? '' : String(opt.value)
           }))
 
           const responseData = {
@@ -199,7 +199,7 @@ export function startObserveStream(config, subId, webContents) {
         const rawPayload = chunk.toString()
         const resOptions = res.options.map(opt => ({
           key: opt.name,
-          value: opt.value.toString()
+          value: opt.value == null ? '' : String(opt.value)
         }))
 
         const responseData = {

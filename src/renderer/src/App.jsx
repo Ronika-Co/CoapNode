@@ -258,6 +258,7 @@ export default function App() {
   
   // Response & Logs States
   const [response, setResponse] = useState(null)
+  const [responseViewMode, setResponseViewMode] = useState('text')
   const [scriptLogs, setScriptLogs] = useState([])
   const [observeLogs, setObserveLogs] = useState([])
   const [errorText, setErrorText] = useState('')
@@ -976,6 +977,12 @@ export default function App() {
       setIsRequesting(false)
       if (res.success) {
         setResponse(res.response)
+        try {
+          JSON.parse(res.response.payload || '')
+          setResponseViewMode('json')
+        } catch {
+          setResponseViewMode('text')
+        }
         setScriptLogs(res.logs || [])
       } else {
         setErrorText(res.error || 'Request failed')
@@ -2132,12 +2139,50 @@ console.log('Processed request: ' + request.payload);`}
                                 <div>Duration: <span className="font-mono text-indigo-400 font-bold">{response.duration} ms</span></div>
                               </div>
 
-                              <textarea
-                                readOnly
-                                value={response.payload}
-                                placeholder="Empty response body"
-                                className="flex-grow w-full min-h-[100px] bg-slate-950 border border-white/10 rounded-lg p-3 text-xs text-slate-300 outline-none font-mono resize-none select-text h-full overflow-y-auto"
-                              />
+                              <div className="flex justify-end items-center mb-2 flex-shrink-0">
+                                <div className="flex gap-2 bg-white/5 p-0.5 rounded-lg border border-white/10 text-xs">
+                                  <button
+                                    onClick={() => setResponseViewMode('text')}
+                                    className={`px-2.5 py-1 rounded-md transition font-semibold ${
+                                      responseViewMode === 'text'
+                                        ? 'bg-indigo-600 text-white shadow-sm'
+                                        : 'text-slate-400 hover:text-slate-200'
+                                    }`}
+                                  >
+                                    Text
+                                  </button>
+                                  <button
+                                    onClick={() => setResponseViewMode('json')}
+                                    className={`px-2.5 py-1 rounded-md transition font-semibold ${
+                                      responseViewMode === 'json'
+                                        ? 'bg-indigo-600 text-white shadow-sm'
+                                        : 'text-slate-400 hover:text-slate-200'
+                                    }`}
+                                  >
+                                    JSON
+                                  </button>
+                                </div>
+                              </div>
+
+                              {responseViewMode === 'json' ? (
+                                <div className="flex-1 overflow-hidden border border-white/10 rounded-lg">
+                                  <CodeMirror
+                                    value={response.payload || ''}
+                                    extensions={[json(), linter(jsonParseLinter())]}
+                                    theme={oneDark}
+                                    height="100%"
+                                    basicSetup={{ lineNumbers: true, foldGutter: false, editable: false }}
+                                    placeholder="Empty response body"
+                                  />
+                                </div>
+                              ) : (
+                                <textarea
+                                  readOnly
+                                  value={response.payload || ''}
+                                  placeholder="Empty response body"
+                                  className="flex-grow w-full min-h-[100px] bg-slate-950 border border-white/10 rounded-lg p-3 text-xs text-slate-300 outline-none font-mono resize-none select-text h-full overflow-y-auto"
+                                />
+                              )}
                             </div>
                           ) : (
                             <div className="text-slate-500 italic text-sm text-center mt-8">

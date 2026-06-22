@@ -168,7 +168,19 @@ function handleIncomingRequest(req, res, webContents) {
             if (/^\d+$/.test(val)) {
               val = parseInt(val, 10)
             }
-            res.setOption(opt.key, val)
+            try {
+              res.setOption(opt.key, val)
+            } catch (e) {
+              if (e.message && /unknown string to buffer converter/i.test(e.message) && typeof val === 'string') {
+                try {
+                  res.setOption(opt.key, Buffer.from(val))
+                } catch (e2) {
+                  console.error(`Failed to set CoAP option ${opt.key}:`, e2.message)
+                }
+              } else {
+                console.error(`Failed to set CoAP option ${opt.key}:`, e.message)
+              }
+            }
           }
         })
       }

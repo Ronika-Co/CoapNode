@@ -1359,7 +1359,7 @@ export default function App() {
             </div>
 
             <div className="p-4 border-t border-white/5 text-xs text-slate-500 text-center">
-              CoapNode v1.0.0 &bull;
+              CoapNode v0.0.1 &bull;
             </div>
           </aside>
 

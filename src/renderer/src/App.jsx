@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { javascript } from '@codemirror/lang-javascript'
 import { oneDark } from '@codemirror/theme-one-dark'
+import { autocompletion } from '@codemirror/autocomplete'
+import { linter } from '@codemirror/lint'
 
 // Custom Dialog/Modal Component to replace window.prompt()
 function InputModal({ isOpen, onClose, onSubmit, title, placeholder, initialValue = '' }) {
@@ -58,6 +60,142 @@ function InputModal({ isOpen, onClose, onSubmit, title, placeholder, initialValu
   )
 }
 
+// ---------- Sandbox API definitions for CodeMirror autocomplete & linting ----------
+
+const preScriptApi = [
+  { label: 'request.url', type: 'property', detail: 'string' },
+  { label: 'request.payload', type: 'property', detail: 'string' },
+  { label: 'request.method', type: 'property', detail: 'string' },
+  { label: 'console.log', type: 'function', detail: '(...args) => void' },
+]
+
+const postScriptApi = [
+  { label: 'request.url', type: 'property', detail: 'string' },
+  { label: 'request.payload', type: 'property', detail: 'string' },
+  { label: 'request.method', type: 'property', detail: 'string' },
+  { label: 'response.code', type: 'property', detail: 'string' },
+  { label: 'response.payload', type: 'property', detail: 'string' },
+  { label: 'response.options', type: 'property', detail: 'Array' },
+  { label: 'console.log', type: 'function', detail: '(...args) => void' },
+]
+
+const mockRouteApi = [
+  { label: 'request.method', type: 'property', detail: 'string' },
+  { label: 'request.payload', type: 'property', detail: 'string' },
+  { label: 'request.options', type: 'property', detail: 'Array' },
+  { label: 'response.code', type: 'property', detail: 'string' },
+  { label: 'response.payload', type: 'property', detail: 'string' },
+  { label: 'response.options', type: 'property', detail: 'Array' },
+  { label: 'console.log', type: 'function', detail: '(...args) => void' },
+]
+
+function createSandboxCompletions(apiList) {
+  return (context) => {
+    let word = context.matchBefore(/\w*\.?\w*/)
+    if (!word || (word.from === word.to && !context.explicit)) return null
+
+    let text = context.state.sliceDoc(word.from, word.to)
+
+    if (text.includes('.')) {
+      const [obj, partial] = text.split('.')
+      const members = apiList
+        .filter(e => e.label.startsWith(obj + '.'))
+        .map(e => ({ label: e.label.split('.')[1], type: e.type, detail: e.detail }))
+        .filter(e => e.label.startsWith(partial))
+
+      if (members.length > 0) {
+        return { from: word.from + obj.length + 1, to: word.to, options: members }
+      }
+    }
+
+    const objs = [...new Set(apiList.map(e => e.label.split('.')[0]))]
+    const matches = objs.filter(o => o.startsWith(text)).map(o => ({
+      label: o, type: 'keyword', detail: 'sandbox object'
+    }))
+
+    if (matches.length > 0) {
+      return { from: word.from, to: word.to, options: matches }
+    }
+
+    return null
+  }
+}
+
+function createSandboxLinter(apiList) {
+  const validLabels = new Set(apiList.map(e => e.label))
+
+  return (view) => {
+    const doc = view.state.doc.toString()
+    const diagnostics = []
+
+    const memberRegex = /(\brequest\b|\bresponse\b|\bconsole\b)\.(\w+)/g
+    let match
+    while ((match = memberRegex.exec(doc)) !== null) {
+      const fullName = `${match[1]}.${match[2]}`
+      if (!validLabels.has(fullName)) {
+        const avail = apiList
+          .filter(e => e.label.startsWith(match[1] + '.'))
+          .map(e => e.label.split('.')[1])
+        diagnostics.push({
+          from: match.index,
+          to: match.index + fullName.length,
+          severity: 'error',
+          message: `"${match[2]}" is not a valid property of "${match[1]}". Available: ${avail.join(', ')}`
+        })
+      }
+    }
+
+    const blockedPatterns = [
+      { regex: /\brequire\s*\(/g, msg: 'require() is not available in the sandbox' },
+      { regex: /^import\s/gm, msg: 'import statements are not available in the sandbox' },
+      { regex: /\bimport\s*\(/g, msg: 'import() is not available in the sandbox' },
+      { regex: /\bfetch\s*\(/g, msg: 'fetch() is not available in the sandbox' },
+      { regex: /\bXMLHttpRequest\b/g, msg: 'XMLHttpRequest is not available in the sandbox' },
+      { regex: /\bprocess\b/g, msg: 'process is not available in the sandbox' },
+      { regex: /\bglobal\b/g, msg: 'global is not available in the sandbox' },
+      { regex: /\b__dirname\b/g, msg: '__dirname is not available in the sandbox' },
+      { regex: /\b__filename\b/g, msg: '__filename is not available in the sandbox' },
+      { regex: /\bmodule\b/g, msg: 'module is not available in the sandbox' },
+      { regex: /\bexports\b/g, msg: 'exports is not available in the sandbox' },
+    ]
+
+    for (const { regex, msg } of blockedPatterns) {
+      regex.lastIndex = 0
+      const m = regex.exec(doc)
+      if (m) {
+        diagnostics.push({
+          from: m.index,
+          to: m.index + m[0].length,
+          severity: 'error',
+          message: msg
+        })
+      }
+    }
+
+    return diagnostics
+  }
+}
+
+// ---------- Pre-built extension sets ----------
+
+const preScriptExtensions = [
+  javascript(),
+  autocompletion({ override: [createSandboxCompletions(preScriptApi)] }),
+  linter(createSandboxLinter(preScriptApi)),
+]
+
+const postScriptExtensions = [
+  javascript(),
+  autocompletion({ override: [createSandboxCompletions(postScriptApi)] }),
+  linter(createSandboxLinter(postScriptApi)),
+]
+
+const mockRouteExtensions = [
+  javascript(),
+  autocompletion({ override: [createSandboxCompletions(mockRouteApi)] }),
+  linter(createSandboxLinter(mockRouteApi)),
+]
+
 export default function App() {
   // Global configuration
   const [globalConfig, setGlobalConfig] = useState({ lastWorkspacePath: '', recentPaths: [] })
@@ -109,8 +247,6 @@ export default function App() {
   const [requestHeight, setRequestHeight] = useState(400)
   const [isResizingSidebar, setIsResizingSidebar] = useState(false)
   const [isResizingRequest, setIsResizingRequest] = useState(false)
-
-  // Variables Autocomplete state
 
   // Variables Autocomplete state
   const [suggestion, setSuggestion] = useState({
@@ -1339,7 +1475,7 @@ export default function App() {
                               <CodeMirror
                                 value={activeRoute.script || ''}
                                 onChange={(val) => handleUpdateMockRoute(activeRoute.id, { script: val })}
-                                extensions={[javascript()]}
+                                extensions={mockRouteExtensions}
                                 theme={oneDark}
                                 height="100%"
                                 basicSetup={{ lineNumbers: true, foldGutter: false, autocompletion: false }}
@@ -1834,7 +1970,7 @@ console.log('Processed request: ' + request.payload);`}
                               <CodeMirror
                                 value={activeReqConfig.preScript || ''}
                                 onChange={(val) => handleUpdateReqField('preScript', val)}
-                                extensions={[javascript()]}
+                                extensions={preScriptExtensions}
                                 theme={oneDark}
                                 height="100%"
                                 basicSetup={{ lineNumbers: true, foldGutter: false, autocompletion: false }}
@@ -1874,7 +2010,7 @@ console.log('Processed request: ' + request.payload);`}
                               <CodeMirror
                                 value={activeReqConfig.postScript || ''}
                                 onChange={(val) => handleUpdateReqField('postScript', val)}
-                                extensions={[javascript()]}
+                                extensions={postScriptExtensions}
                                 theme={oneDark}
                                 height="100%"
                                 basicSetup={{ lineNumbers: true, foldGutter: false, autocompletion: false }}

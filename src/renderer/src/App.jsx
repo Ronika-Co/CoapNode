@@ -1679,6 +1679,8 @@ function TabRequestPanel({
   handleInputKeyDown, checkAutocompleteTrigger, handleInputHover,
 }) {
   const [isResizingRequest, setIsResizingRequest] = useState(false)
+  const [showPreHelp, setShowPreHelp] = useState(false)
+  const [showPostHelp, setShowPostHelp] = useState(false)
 
   const startResizeRequest = (e) => {
     e.preventDefault()
@@ -2124,38 +2126,50 @@ function TabRequestPanel({
               <div className="h-full flex flex-col gap-3">
                 <div className="flex justify-between items-center">
                   <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Pre-Request Script (NodeJS sandbox)</label>
-                  <span className="text-[10px] text-indigo-400 font-bold bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">JavaScript Enabled</span>
-                </div>
-
-                <div className="flex-1 flex flex-col md:flex-row gap-3 overflow-hidden min-h-0">
-                  <div className="flex-1 overflow-hidden border border-white/10 rounded-lg">
-                    <CodeMirror
-                      value={requestConfig.preScript || ''}
-                      onChange={(val) => onUpdateConfig('preScript', val)}
-                      extensions={preScriptExtensions}
-                      theme={oneDark}
-                      height="100%"
-                      basicSetup={{ lineNumbers: true, foldGutter: false, autocompletion: false }}
-                      placeholder="// Write pre-request script here..."
-                    />
-                  </div>
-
-                  <div className="w-full md:w-56 p-3 bg-white/[0.02] border border-white/5 rounded-lg text-[10px] text-slate-400 flex flex-col gap-2 font-sans select-text overflow-y-auto h-full flex-shrink-0">
-                    <span className="font-semibold text-slate-200 text-xs">NodeJS Sandbox API</span>
-                    <p>This script runs in a sandboxed NodeJS `vm` context before request transmission.</p>
-                    <div className="h-px bg-white/5" />
-                    <span className="font-semibold text-slate-200">Context Properties:</span>
-                    <ul className="list-disc pl-4 space-y-1 text-slate-300 font-mono">
-                      <li>request.url (string)</li>
-                      <li>request.payload (string)</li>
-                      <li>request.method (string)</li>
-                      <li>env.&lt;variable&gt; (string)</li>
-                    </ul>
-                    <div className="h-px bg-white/5" />
-                    <span className="font-semibold text-slate-200">Examples:</span>
-                    <code className="text-indigo-400 block whitespace-pre-wrap">request.payload = "Mutated text";&#10;console.log("Starting req...");&#10;console.log("Host: " + env.host);</code>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setShowPreHelp(true)}
+                      className="w-5 h-5 flex items-center justify-center rounded-full bg-white/5 border border-white/10 text-[10px] text-slate-400 hover:text-slate-200 hover:bg-white/10 transition font-bold"
+                      title="Sandbox API Help"
+                    >?</button>
+                    <span className="text-[10px] text-indigo-400 font-bold bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">JavaScript Enabled</span>
                   </div>
                 </div>
+
+                <div className="flex-1 overflow-hidden border border-white/10 rounded-lg">
+                  <CodeMirror
+                    value={requestConfig.preScript || ''}
+                    onChange={(val) => onUpdateConfig('preScript', val)}
+                    extensions={preScriptExtensions}
+                    theme={oneDark}
+                    height="100%"
+                    basicSetup={{ lineNumbers: true, foldGutter: false, autocompletion: false }}
+                    placeholder="// Write pre-request script here..."
+                  />
+                </div>
+
+                {showPreHelp && (
+                  <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center" onClick={() => setShowPreHelp(false)}>
+                    <div className="bg-slate-900 border border-white/10 rounded-xl p-5 max-w-md w-full mx-4 max-h-[80vh] overflow-y-auto text-[10px] text-slate-400 flex flex-col gap-2 font-sans select-text" onClick={e => e.stopPropagation()}>
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold text-slate-200 text-xs">NodeJS Sandbox API</span>
+                        <button onClick={() => setShowPreHelp(false)} className="text-slate-500 hover:text-slate-200 text-sm font-bold">&times;</button>
+                      </div>
+                      <p>This script runs in a sandboxed NodeJS `vm` context before request transmission.</p>
+                      <div className="h-px bg-white/5" />
+                      <span className="font-semibold text-slate-200">Context Properties:</span>
+                      <ul className="list-disc pl-4 space-y-1 text-slate-300 font-mono">
+                        <li>request.url (string)</li>
+                        <li>request.payload (string)</li>
+                        <li>request.method (string)</li>
+                        <li>env.&lt;variable&gt; (string)</li>
+                      </ul>
+                      <div className="h-px bg-white/5" />
+                      <span className="font-semibold text-slate-200">Examples:</span>
+                      <code className="text-indigo-400 block whitespace-pre-wrap">request.payload = "Mutated text";&#10;console.log("Starting req...");&#10;console.log("Host: " + env.host);</code>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -2164,38 +2178,50 @@ function TabRequestPanel({
               <div className="h-full flex flex-col gap-3">
                 <div className="flex justify-between items-center">
                   <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Post-Request Script (NodeJS sandbox)</label>
-                  <span className="text-[10px] text-indigo-400 font-bold bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">JavaScript Enabled</span>
-                </div>
-
-                <div className="flex-1 flex flex-col md:flex-row gap-3 overflow-hidden min-h-0">
-                  <div className="flex-1 overflow-hidden border border-white/10 rounded-lg">
-                    <CodeMirror
-                      value={requestConfig.postScript || ''}
-                      onChange={(val) => onUpdateConfig('postScript', val)}
-                      extensions={postScriptExtensions}
-                      theme={oneDark}
-                      height="100%"
-                      basicSetup={{ lineNumbers: true, foldGutter: false, autocompletion: false }}
-                      placeholder="// Write post-request script here..."
-                    />
-                  </div>
-
-                  <div className="w-full md:w-56 p-3 bg-white/[0.02] border border-white/5 rounded-lg text-[10px] text-slate-400 flex flex-col gap-2 font-sans select-text overflow-y-auto h-full flex-shrink-0">
-                    <span className="font-semibold text-slate-200 text-xs">NodeJS Sandbox API</span>
-                    <p>This script runs in a sandboxed NodeJS `vm` context after response reception.</p>
-                    <div className="h-px bg-white/5" />
-                    <span className="font-semibold text-slate-200">Context Properties:</span>
-                    <ul className="list-disc pl-4 space-y-1 text-slate-300 font-mono">
-                      <li>response.code (string)</li>
-                      <li>response.payload (string)</li>
-                      <li>response.options (array)</li>
-                      <li>env.&lt;variable&gt; (string)</li>
-                    </ul>
-                    <div className="h-px bg-white/5" />
-                    <span className="font-semibold text-slate-200">Examples:</span>
-                    <code className="text-indigo-400 block whitespace-pre-wrap">console.log("Body: " + response.payload);&#10;console.log("Host: " + env.host);</code>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setShowPostHelp(true)}
+                      className="w-5 h-5 flex items-center justify-center rounded-full bg-white/5 border border-white/10 text-[10px] text-slate-400 hover:text-slate-200 hover:bg-white/10 transition font-bold"
+                      title="Sandbox API Help"
+                    >?</button>
+                    <span className="text-[10px] text-indigo-400 font-bold bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">JavaScript Enabled</span>
                   </div>
                 </div>
+
+                <div className="flex-1 overflow-hidden border border-white/10 rounded-lg">
+                  <CodeMirror
+                    value={requestConfig.postScript || ''}
+                    onChange={(val) => onUpdateConfig('postScript', val)}
+                    extensions={postScriptExtensions}
+                    theme={oneDark}
+                    height="100%"
+                    basicSetup={{ lineNumbers: true, foldGutter: false, autocompletion: false }}
+                    placeholder="// Write post-request script here..."
+                  />
+                </div>
+
+                {showPostHelp && (
+                  <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center" onClick={() => setShowPostHelp(false)}>
+                    <div className="bg-slate-900 border border-white/10 rounded-xl p-5 max-w-md w-full mx-4 max-h-[80vh] overflow-y-auto text-[10px] text-slate-400 flex flex-col gap-2 font-sans select-text" onClick={e => e.stopPropagation()}>
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold text-slate-200 text-xs">NodeJS Sandbox API</span>
+                        <button onClick={() => setShowPostHelp(false)} className="text-slate-500 hover:text-slate-200 text-sm font-bold">&times;</button>
+                      </div>
+                      <p>This script runs in a sandboxed NodeJS `vm` context after response reception.</p>
+                      <div className="h-px bg-white/5" />
+                      <span className="font-semibold text-slate-200">Context Properties:</span>
+                      <ul className="list-disc pl-4 space-y-1 text-slate-300 font-mono">
+                        <li>response.code (string)</li>
+                        <li>response.payload (string)</li>
+                        <li>response.options (array)</li>
+                        <li>env.&lt;variable&gt; (string)</li>
+                      </ul>
+                      <div className="h-px bg-white/5" />
+                      <span className="font-semibold text-slate-200">Examples:</span>
+                      <code className="text-indigo-400 block whitespace-pre-wrap">console.log("Body: " + response.payload);&#10;console.log("Host: " + env.host);</code>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -2643,6 +2669,7 @@ function TabMockConfigPanel({
 // ----- MOCK ROUTE TAB PANEL -----
 function TabMockRoutePanel({ tab, route, envVarKeys = [], onUpdateRoute, onUpdateTabState }) {
   const [isResizingRequest, setIsResizingRequest] = useState(false)
+  const [showMockHelp, setShowMockHelp] = useState(false)
 
   const mockRouteExtensions = React.useMemo(() => createMockRouteExtensions(envVarKeys), [envVarKeys])
 
@@ -2716,9 +2743,16 @@ function TabMockRoutePanel({ tab, route, envVarKeys = [], onUpdateRoute, onUpdat
             </div>
 
             {/* Script Editor & Sandbox Reference */}
-            <div className="flex-grow flex flex-col md:flex-row overflow-hidden min-h-0">
+            <div className="flex-grow flex flex-col overflow-hidden min-h-0">
               <div className="flex-1 flex flex-col p-4 overflow-hidden min-h-0">
-                <label className="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-2">Sandbox Handler Script (NodeJS)</label>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Sandbox Handler Script (NodeJS)</label>
+                  <button
+                    onClick={() => setShowMockHelp(true)}
+                    className="w-5 h-5 flex items-center justify-center rounded-full bg-white/5 border border-white/10 text-[10px] text-slate-400 hover:text-slate-200 hover:bg-white/10 transition font-bold flex-shrink-0"
+                    title="Sandbox API Help"
+                  >?</button>
+                </div>
 
                 <div className="flex-grow overflow-hidden border border-white/10 rounded-xl">
                   <CodeMirror
@@ -2732,34 +2766,40 @@ function TabMockRoutePanel({ tab, route, envVarKeys = [], onUpdateRoute, onUpdat
                   />
                 </div>
               </div>
+            </div>
 
-              <div className="w-full md:w-80 border-t md:border-t-0 md:border-l border-white/5 bg-slate-950/20 p-4 overflow-y-auto text-xs text-slate-400">
-                <h3 className="font-semibold text-slate-300 mb-2 uppercase tracking-wider text-[10px]">VM Sandbox Context</h3>
-                <div className="space-y-3 font-mono text-[10px]">
-                  <div>
-                    <span className="text-indigo-300 block">request</span>
-                    <span className="text-slate-500 pl-2 block">- method: string</span>
-                    <span className="text-slate-500 pl-2 block">- payload: string</span>
-                    <span className="text-slate-500 pl-2 block">- options: Array{"<{key, value}>"}</span>
+            {showMockHelp && (
+              <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center" onClick={() => setShowMockHelp(false)}>
+                <div className="bg-slate-900 border border-white/10 rounded-xl p-5 max-w-md w-full mx-4 max-h-[80vh] overflow-y-auto text-[10px] text-slate-400 flex flex-col gap-2 font-sans select-text" onClick={e => e.stopPropagation()}>
+                  <div className="flex justify-between items-center">
+                    <h3 className="font-semibold text-slate-300 text-xs">VM Sandbox Context</h3>
+                    <button onClick={() => setShowMockHelp(false)} className="text-slate-500 hover:text-slate-200 text-sm font-bold">&times;</button>
                   </div>
-                  <div>
-                    <span className="text-indigo-300 block">response</span>
-                    <span className="text-slate-500 pl-2 block">- code: string (default '2.05')</span>
-                    <span className="text-slate-500 pl-2 block">- payload: string (default 'Mock Response')</span>
-                    <span className="text-slate-500 pl-2 block">- options: Array{"<{key, value}>"}</span>
-                  </div>
-                  <div>
-                    <span className="text-indigo-300 block">env</span>
-                    <span className="text-slate-500 pl-2 block">- &lt;variable&gt;: string</span>
-                  </div>
-                  <div>
-                    <span className="text-indigo-300 block">console.log(...args)</span>
-                    <span className="text-slate-500 pl-2 block">Logs to mock script log console</span>
-                  </div>
+                  <div className="space-y-3 font-mono text-[10px]">
+                    <div>
+                      <span className="text-indigo-300 block">request</span>
+                      <span className="text-slate-500 pl-2 block">- method: string</span>
+                      <span className="text-slate-500 pl-2 block">- payload: string</span>
+                      <span className="text-slate-500 pl-2 block">- options: Array{"<{key, value}>"}</span>
+                    </div>
+                    <div>
+                      <span className="text-indigo-300 block">response</span>
+                      <span className="text-slate-500 pl-2 block">- code: string (default '2.05')</span>
+                      <span className="text-slate-500 pl-2 block">- payload: string (default 'Mock Response')</span>
+                      <span className="text-slate-500 pl-2 block">- options: Array{"<{key, value}>"}</span>
+                    </div>
+                    <div>
+                      <span className="text-indigo-300 block">env</span>
+                      <span className="text-slate-500 pl-2 block">- &lt;variable&gt;: string</span>
+                    </div>
+                    <div>
+                      <span className="text-indigo-300 block">console.log(...args)</span>
+                      <span className="text-slate-500 pl-2 block">Logs to mock script log console</span>
+                    </div>
 
-                  <div className="h-px bg-white/5 pt-2" />
-                  <span className="font-semibold text-slate-200">Example:</span>
-                  <code className="text-indigo-400 block whitespace-pre-wrap leading-relaxed">
+                    <div className="h-px bg-white/5 pt-2" />
+                    <span className="font-semibold text-slate-200">Example:</span>
+                    <code className="text-indigo-400 block whitespace-pre-wrap leading-relaxed">
 {`// Return JSON response
 response.code = '2.05';
 response.payload = JSON.stringify({
@@ -2772,10 +2812,11 @@ response.options.push({
 });
 console.log('Processed request: ' + request.payload);
 console.log('Env host: ' + env.host);`}
-                  </code>
+                    </code>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
 

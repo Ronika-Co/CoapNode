@@ -56,6 +56,8 @@ export function TabProvider({ children }) {
         found = prev.find(t => t.type === 'environment' && t.envId === id)
       } else if (type === 'mock-route') {
         found = prev.find(t => t.type === 'mock-route' && t.routeId === id)
+      } else if (type === 'collection') {
+        found = prev.find(t => t.type === 'collection' && t.collectionId === id)
       }
 
       if (found) {
@@ -70,6 +72,7 @@ export function TabProvider({ children }) {
         requestId: type === 'request' ? id : null,
         envId: type === 'environment' ? id : null,
         routeId: type === 'mock-route' ? id : null,
+        collectionId: type === 'collection' ? id : null,
         ...createDefaultTabState(),
       }
 

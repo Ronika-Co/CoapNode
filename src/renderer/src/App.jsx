@@ -293,6 +293,8 @@ export default function App() {
   const [modalType, setModalType] = useState('') // 'collection' | 'request' | 'env' | 'mockRoute'
   const [modalTargetId, setModalTargetId] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [modalMode, setModalMode] = useState('create') // 'create' | 'rename'
+  const [modalInitialValue, setModalInitialValue] = useState('')
 
   // Variables Autocomplete state
   const [suggestion, setSuggestion] = useState({
@@ -312,6 +314,7 @@ export default function App() {
     ? activeTab.type === 'request' ? activeTab.requestId
       : activeTab.type === 'environment' ? activeTab.envId
       : activeTab.type === 'mock-route' ? activeTab.routeId
+      : activeTab.type === 'collection' ? activeTab.collectionId
       : null
     : null
 
@@ -745,6 +748,14 @@ export default function App() {
 
   const selectedEnvironment = getSelectedEnvironment()
 
+  // Helper: get selected collection for active collection tab
+  const getSelectedCollection = () => {
+    if (!activeTab || activeTab.type !== 'collection' || !workspaceData) return null
+    return workspaceData.collections.find(c => c.id === activeTab.collectionId) || null
+  }
+
+  const selectedCollection = getSelectedCollection()
+
   // Add Collection
   const handleAddCollection = (name) => {
     if (!workspaceData) return
@@ -760,6 +771,17 @@ export default function App() {
     saveWorkspaceState(updated)
   }
 
+  // Rename Collection
+  const handleRenameCollection = (colId, newName) => {
+    if (!workspaceData || !newName.trim()) return
+    const updatedCols = workspaceData.collections.map(c =>
+      c.id === colId ? { ...c, name: newName } : c
+    )
+    saveWorkspaceState({ ...workspaceData, collections: updatedCols })
+    const tab = tabs.find(t => t.type === 'collection' && t.collectionId === colId)
+    if (tab) updateTabState(tab.id, { title: newName })
+  }
+
   // Delete Collection folder (removes folders and nested requests)
   const handleDeleteCollection = (colId) => {
     if (!confirm('Are you sure you want to delete this folder collection and all its requests?')) return
@@ -771,6 +793,10 @@ export default function App() {
         if (tabToClose) closeTab(tabToClose.id)
       })
     }
+
+    // Close collection tab
+    const colTab = tabs.find(t => t.type === 'collection' && t.collectionId === colId)
+    if (colTab) closeTab(colTab.id)
 
     const updated = {
       ...workspaceData,
@@ -809,6 +835,20 @@ export default function App() {
     openTab('request', newReq.id, newReq.name)
   }
 
+  // Rename Request
+  const handleRenameRequest = (reqId, newName) => {
+    if (!workspaceData || !newName.trim()) return
+    const updatedCols = workspaceData.collections.map(c => ({
+      ...c,
+      requests: c.requests.map(r =>
+        r.id === reqId ? { ...r, name: newName } : r
+      )
+    }))
+    saveWorkspaceState({ ...workspaceData, collections: updatedCols })
+    const tab = tabs.find(t => t.type === 'request' && t.requestId === reqId)
+    if (tab) updateTabState(tab.id, { title: newName })
+  }
+
   // Delete Request
   const handleDeleteRequest = (colId, reqId) => {
     if (!confirm('Are you sure you want to delete this request?')) return
@@ -843,6 +883,17 @@ export default function App() {
     }
     saveWorkspaceState(updated)
     openTab('environment', newEnv.id, newEnv.name)
+  }
+
+  // Rename Environment
+  const handleRenameEnvironment = (envId, newName) => {
+    if (!workspaceData || !newName.trim()) return
+    const updatedEnvs = workspaceData.environments.map(e =>
+      e.id === envId ? { ...e, name: newName } : e
+    )
+    saveWorkspaceState({ ...workspaceData, environments: updatedEnvs })
+    const tab = tabs.find(t => t.type === 'environment' && t.envId === envId)
+    if (tab) updateTabState(tab.id, { title: newName })
   }
 
   // Delete Environment
@@ -913,13 +964,13 @@ export default function App() {
   }
 
   // Add Mock Route
-  const handleAddMockRoute = (path) => {
-    if (!workspaceData) return
-    const formattedPath = '/' + path.replace(/^\//, '')
+  const handleAddMockRoute = (name) => {
+    if (!workspaceData || !name.trim()) return
     const newRoute = {
       id: Math.random().toString(),
+      name,
       method: 'GET',
-      path: formattedPath,
+      path: '/',
       script: `// Mock Response Script\nresponse.code = '2.05';\nresponse.payload = 'Hello from CoAP Mock Server!';\n`
     }
     const updatedRoutes = [...(workspaceData.mockRoutes || []), newRoute]
@@ -928,7 +979,7 @@ export default function App() {
       mockRoutes: updatedRoutes
     }
     saveWorkspaceState(updated)
-    openTab('mock-route', newRoute.id, `${newRoute.method} ${newRoute.path}`)
+    openTab('mock-route', newRoute.id, newRoute.name)
     if (isMockRunning) {
       window.api.mockServer.updateRoutes(updatedRoutes)
     }
@@ -963,19 +1014,25 @@ export default function App() {
       ...workspaceData,
       mockRoutes: updatedRoutes
     })
-    // Update tab title if path or method changed
-    if (fields.path || fields.method) {
+    // Update tab title if name, path, or method changed
+    if (fields.name || fields.path || fields.method) {
       const route = updatedRoutes.find(r => r.id === routeId)
       if (route) {
         const tab = tabs.find(t => t.type === 'mock-route' && t.routeId === routeId)
         if (tab) {
-          updateTabState(tab.id, { title: `${route.method} ${route.path}` })
+          updateTabState(tab.id, { title: route.name || `${route.method} ${route.path}` })
         }
       }
     }
     if (isMockRunning) {
       window.api.mockServer.updateRoutes(updatedRoutes)
     }
+  }
+
+  // Rename Mock Route
+  const handleRenameMockRoute = (routeId, newName) => {
+    if (!workspaceData || !newName.trim()) return
+    handleUpdateMockRoute(routeId, { name: newName })
   }
 
   const handleAddVariableRow = (envId) => {
@@ -1030,6 +1087,10 @@ export default function App() {
       ...workspaceData,
       collections: updatedCols
     })
+
+    if (field === 'name' && value) {
+      updateTabState(activeTab.id, { title: value })
+    }
   }
 
   // Options row tables (for active request tab)
@@ -1154,10 +1215,18 @@ export default function App() {
     }
   }
 
-  const openInputModal = (type, targetId) => {
+  const openInputModal = (type, targetId, mode = 'create', initialValue = '') => {
     setModalType(type)
     setModalTargetId(targetId)
+    setModalMode(mode)
+    setModalInitialValue(initialValue)
     setIsModalOpen(true)
+  }
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false)
+    setModalMode('create')
+    setModalInitialValue('')
   }
 
   return (
@@ -1296,20 +1365,25 @@ export default function App() {
 
                     {(workspaceData.collections || []).map(col => (
                       <div key={col.id} className="mb-4">
-                        <div className="flex justify-between items-center py-1 group">
+                        <div
+                          onClick={() => openTab('collection', col.id, col.name)}
+                          className={`flex justify-between items-center py-1 group cursor-pointer ${
+                            sidebarSelectedId === col.id ? 'text-indigo-400' : ''
+                          }`}
+                        >
                           <div className="flex items-center gap-2 text-slate-300 font-medium text-sm overflow-hidden mr-2">
                             <span className="text-amber-500 text-base flex-shrink-0">📁</span>
                             <span className="truncate">{col.name}</span>
                           </div>
                           <div className="flex items-center gap-1.5 flex-shrink-0">
                             <button
-                              onClick={() => openInputModal('request', col.id)}
+                              onClick={(e) => { e.stopPropagation(); openInputModal('request', col.id) }}
                               className="opacity-40 group-hover:opacity-100 transition-all duration-200 text-[10px] bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20 px-2 py-0.5 rounded"
                             >
                               + Req
                             </button>
                             <button
-                              onClick={() => handleDeleteCollection(col.id)}
+                              onClick={(e) => { e.stopPropagation(); handleDeleteCollection(col.id) }}
                               className="opacity-40 group-hover:opacity-100 transition-all duration-200 flex-shrink-0 w-5 h-5 flex items-center justify-center rounded text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 text-xs"
                               title="Delete collection folder and nested requests"
                             >
@@ -1431,13 +1505,13 @@ export default function App() {
                               ? 'bg-indigo-500/10 border-indigo-500/30 text-slate-100'
                               : 'border-transparent hover:bg-white/5 text-slate-400 hover:text-slate-200'
                           }`}
-                          onClick={() => openTab('mock-route', route.id, `${route.method || 'GET'} ${route.path}`)}
+                          onClick={() => openTab('mock-route', route.id, route.name || `${route.method || 'GET'} ${route.path}`)}
                         >
                           <div className="flex items-center gap-2 overflow-hidden mr-2">
                             <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${getMethodStyle(route.method || 'GET')}`}>
                               {route.method || 'GET'}
                             </span>
-                            <span className="truncate font-mono">{route.path}</span>
+                            <span className="truncate">{route.name || route.path}</span>
                           </div>
 
                           <button
@@ -1501,10 +1575,47 @@ export default function App() {
                   />
                 )}
 
+                {/* COLLECTION TAB */}
+                {activeTab.type === 'collection' && selectedCollection && (
+                  <div className="flex-grow flex flex-col p-6 overflow-y-auto">
+                    <div className="flex items-center gap-3 mb-8 pb-4 border-b border-white/5">
+                      <span className="text-2xl">📁</span>
+                      <input
+                        type="text"
+                        value={selectedCollection.name || ''}
+                        onChange={(e) => handleRenameCollection(selectedCollection.id, e.target.value)}
+                        className="text-xl font-bold text-slate-100 bg-transparent border-b border-transparent hover:border-white/20 focus:border-indigo-500/50 outline-none px-1 -ml-1 flex-1"
+                      />
+                    </div>
+                    <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Requests</h3>
+                    <div className="space-y-2">
+                      {(selectedCollection.requests || []).length === 0 && (
+                        <div className="text-slate-500 italic text-sm text-center p-8 border border-dashed border-white/5 rounded-2xl bg-white/[0.01]">
+                          No requests in this folder.
+                        </div>
+                      )}
+                      {(selectedCollection.requests || []).map(req => (
+                        <div
+                          key={req.id}
+                          onClick={() => openTab('request', req.id, req.name)}
+                          className="flex items-center gap-3 p-3 rounded-xl border border-white/5 hover:bg-white/5 cursor-pointer transition group"
+                        >
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${getMethodStyle(req.method)}`}>
+                            {req.method}
+                          </span>
+                          <span className="text-sm text-slate-300 truncate flex-1">{req.name}</span>
+                          <span className="text-xs text-slate-500 truncate font-mono">{req.url}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* ENVIRONMENT TAB */}
                 {activeTab.type === 'environment' && selectedEnvironment && (
                   <TabEnvironmentPanel
                     environment={selectedEnvironment}
+                    onUpdateName={(name) => handleRenameEnvironment(selectedEnvironment.id, name)}
                     onAddVariable={handleAddVariableRow}
                     onUpdateVariable={handleUpdateVariableRow}
                     onDeleteVariable={handleDeleteVariableRow}
@@ -1620,34 +1731,38 @@ export default function App() {
       {/* CUSTOM INPUT MODALS */}
       <InputModal
         isOpen={isModalOpen && modalType === 'collection'}
-        onClose={() => setIsModalOpen(false)}
-        onSubmit={handleAddCollection}
-        title="Create Folder Collection"
+        onClose={handleCloseModal}
+        onSubmit={modalMode === 'create' ? handleAddCollection : (name) => handleRenameCollection(modalTargetId, name)}
+        title={modalMode === 'create' ? 'Create Folder Collection' : 'Rename Collection'}
         placeholder="Enter folder name..."
+        initialValue={modalMode === 'rename' ? modalInitialValue : ''}
       />
 
       <InputModal
         isOpen={isModalOpen && modalType === 'request'}
-        onClose={() => setIsModalOpen(false)}
-        onSubmit={handleAddRequest}
-        title="Create CoAP Request"
+        onClose={handleCloseModal}
+        onSubmit={modalMode === 'create' ? handleAddRequest : (name) => handleRenameRequest(modalTargetId, name)}
+        title={modalMode === 'create' ? 'Create CoAP Request' : 'Rename Request'}
         placeholder="Enter request name..."
+        initialValue={modalMode === 'rename' ? modalInitialValue : ''}
       />
 
       <InputModal
         isOpen={isModalOpen && modalType === 'env'}
-        onClose={() => setIsModalOpen(false)}
-        onSubmit={handleAddEnvironment}
-        title="Create Environment"
+        onClose={handleCloseModal}
+        onSubmit={modalMode === 'create' ? handleAddEnvironment : (name) => handleRenameEnvironment(modalTargetId, name)}
+        title={modalMode === 'create' ? 'Create Environment' : 'Rename Environment'}
         placeholder="e.g. Production, Staging"
+        initialValue={modalMode === 'rename' ? modalInitialValue : ''}
       />
 
       <InputModal
         isOpen={isModalOpen && modalType === 'mockRoute'}
-        onClose={() => setIsModalOpen(false)}
-        onSubmit={handleAddMockRoute}
-        title="Create Mock Route"
-        placeholder="e.g. /hello"
+        onClose={handleCloseModal}
+        onSubmit={modalMode === 'create' ? handleAddMockRoute : (name) => handleRenameMockRoute(modalTargetId, name)}
+        title={modalMode === 'create' ? 'Create Mock Route' : 'Rename Mock Route'}
+        placeholder={modalMode === 'create' ? 'e.g. Temperature Sensor' : 'Enter route name...'}
+        initialValue={modalMode === 'rename' ? modalInitialValue : ''}
       />
 
     </div>
@@ -1766,8 +1881,19 @@ function TabRequestPanel({
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Request name bar */}
+      <div className="p-4 pb-2 border-b border-white/5 bg-slate-950/20 flex gap-3 items-center">
+        <input
+          type="text"
+          value={requestConfig.name || ''}
+          onChange={(e) => onUpdateConfig('name', e.target.value)}
+          placeholder="Request name"
+          className="flex-1 bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-sm font-semibold text-slate-200 outline-none focus:border-indigo-500/50"
+        />
+      </div>
+
       {/* Topbar URL / Methods */}
-      <div className="p-4 border-b border-white/5 bg-slate-950/20 flex gap-3 items-center">
+      <div className="px-4 py-2 border-b border-white/5 bg-slate-950/20 flex gap-3 items-center">
         <select
           value={requestConfig.method}
           onChange={(e) => onUpdateConfig('method', e.target.value)}
@@ -2437,13 +2563,18 @@ function TabRequestPanel({
 }
 
 // ----- ENVIRONMENT TAB PANEL -----
-function TabEnvironmentPanel({ environment, onAddVariable, onUpdateVariable, onDeleteVariable }) {
+function TabEnvironmentPanel({ environment, onUpdateName, onAddVariable, onUpdateVariable, onDeleteVariable }) {
   return (
     <div className="flex-grow flex flex-col p-6 overflow-y-auto">
       <div className="flex justify-between items-center mb-6 pb-4 border-b border-white/5">
         <div className="flex items-center gap-3">
           <span className="text-2xl">🌱</span>
-          <h2 className="text-xl font-bold text-slate-100">{environment.name} Variables</h2>
+          <input
+            type="text"
+            value={environment.name || ''}
+            onChange={(e) => onUpdateName(e.target.value)}
+            className="text-xl font-bold text-slate-100 bg-transparent border-b border-transparent hover:border-white/20 focus:border-indigo-500/50 outline-none px-1 -ml-1"
+          />
         </div>
         <button
           onClick={() => onAddVariable(environment.id)}
@@ -2720,8 +2851,19 @@ function TabMockRoutePanel({ tab, route, envVarKeys = [], onUpdateRoute, onUpdat
         {/* Top: Route Editor */}
         <div style={{ height: tab.splitPosition }} className="flex flex-col overflow-hidden flex-shrink-0 relative border-b border-white/5 bg-slate-900/10">
           <div className="flex-grow flex flex-col overflow-hidden min-h-0">
+            {/* Route name bar */}
+            <div className="p-4 pb-2 border-b border-white/5 bg-slate-950/10 flex gap-3 items-center flex-shrink-0">
+              <input
+                type="text"
+                value={route.name || ''}
+                onChange={(e) => onUpdateRoute(route.id, { name: e.target.value })}
+                placeholder="Route name"
+                className="flex-1 bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs font-semibold text-slate-200 outline-none focus:border-indigo-500/40"
+              />
+            </div>
+
             {/* Route method, path bar */}
-            <div className="p-4 border-b border-white/5 bg-slate-950/10 flex gap-3 items-center flex-shrink-0">
+            <div className="px-4 py-2 border-b border-white/5 bg-slate-950/10 flex gap-3 items-center flex-shrink-0">
               <select
                 value={route.method || 'GET'}
                 onChange={(e) => onUpdateRoute(route.id, { method: e.target.value })}

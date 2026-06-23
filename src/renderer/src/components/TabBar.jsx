@@ -6,6 +6,7 @@ const TAB_ICONS = {
   environment: '🌱',
   'mock-config': '🛠️',
   'mock-route': '↳',
+  collection: '📁',
 }
 
 const TAB_TYPE_LABELS = {
@@ -13,6 +14,7 @@ const TAB_TYPE_LABELS = {
   environment: 'Environment',
   'mock-config': 'Mock Server',
   'mock-route': 'Route',
+  collection: 'Folder',
 }
 
 export default function TabBar() {

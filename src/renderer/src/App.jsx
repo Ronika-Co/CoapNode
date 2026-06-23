@@ -1127,7 +1127,7 @@ export default function App() {
           className={`fixed px-3 py-1.5 rounded-lg border text-[10px] font-mono shadow-2xl z-[999] pointer-events-none transform -translate-x-1/2 animate-scale-up ${
             tooltip.isError
               ? 'bg-rose-950/90 border-rose-500/40 text-rose-300'
-              : 'bg-indigo-950/90 border-indigo-500/40 text-indigo-300'
+              : 'bg-amber-950/90 border-amber-500/40 text-amber-300'
           }`}
         >
           {tooltip.text}
@@ -1614,6 +1614,18 @@ export default function App() {
 // Sub-components for tab panels (extracted from monolithic App)
 // ============================================================
 
+// Build colored HTML for env var display inside inputs
+function buildColoredText(text, variables) {
+  if (typeof text !== 'string' || !text) return ''
+  const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  return escaped.replace(/\{\{([^}]+)\}\}/g, (match, key) => {
+    const varName = key.trim()
+    const found = (variables || []).find(v => v.key === varName)
+    const color = found ? 'text-amber-400' : 'text-rose-400'
+    return `<span class="${color} font-semibold">${match}</span>`
+  })
+}
+
 // ----- REQUEST TAB PANEL -----
 function TabRequestPanel({
   tab, requestConfig, workspaceData, isMockRunning,
@@ -1694,6 +1706,13 @@ function TabRequestPanel({
     }
   }
 
+  // Active environment variables for inline coloring
+  const activeEnvVars = (() => {
+    if (!workspaceData?.activeEnvironmentId) return []
+    const env = (workspaceData.environments || []).find(e => e.id === workspaceData.activeEnvironmentId)
+    return env?.variables || []
+  })()
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Topbar URL / Methods */}
@@ -1723,8 +1742,12 @@ function TabRequestPanel({
             onMouseEnter={(e) => handleInputHover(e, requestConfig.url)}
             onMouseLeave={() => onSetTooltip({ show: false, text: '', x: 0, y: 0, isError: false })}
             placeholder="coap://{{host}}:5683/resource"
-            className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-slate-100 outline-none focus:border-indigo-500/50"
+            className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-slate-100 outline-none focus:border-indigo-500/50 caret-slate-100 text-transparent"
           />
+          {requestConfig.url && (
+            <div className="absolute inset-0 px-3 py-2 text-sm font-sans truncate pointer-events-none text-slate-100"
+                 dangerouslySetInnerHTML={{ __html: buildColoredText(requestConfig.url, activeEnvVars) }} />
+          )}
         </div>
 
         {/* Active Environment Selector Dropdown */}
@@ -1846,40 +1869,52 @@ function TabRequestPanel({
                 <div className="space-y-2">
                   {requestConfig.queryParams?.map((row, idx) => (
                     <div key={idx} className="flex gap-2 items-center">
-                      <input
-                        type="text"
-                        value={row.key}
-                        data-field-type="queryParams"
-                        data-row-index={idx}
-                        data-field-key="key"
-                        onChange={(e) => {
-                          onUpdateRow('queryParams', idx, 'key', e.target.value)
-                          handleInputHover(e, e.target.value)
-                          checkAutocompleteTrigger(e, e.target.value)
-                        }}
-                        onKeyDown={handleInputKeyDown}
-                        onMouseEnter={(e) => handleInputHover(e, row.key)}
-                        onMouseLeave={() => onSetTooltip({ show: false, text: '', x: 0, y: 0, isError: false })}
-                        placeholder="Key"
-                        className="flex-1 bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500/40 font-mono"
-                      />
-                      <input
-                        type="text"
-                        value={row.value}
-                        data-field-type="queryParams"
-                        data-row-index={idx}
-                        data-field-key="value"
-                        onChange={(e) => {
-                          onUpdateRow('queryParams', idx, 'value', e.target.value)
-                          handleInputHover(e, e.target.value)
-                          checkAutocompleteTrigger(e, e.target.value)
-                        }}
-                        onKeyDown={handleInputKeyDown}
-                        onMouseEnter={(e) => handleInputHover(e, row.value)}
-                        onMouseLeave={() => onSetTooltip({ show: false, text: '', x: 0, y: 0, isError: false })}
-                        placeholder="Value"
-                        className="flex-1 bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500/40 font-mono"
-                      />
+                      <div className="flex-1 relative">
+                        <input
+                          type="text"
+                          value={row.key}
+                          data-field-type="queryParams"
+                          data-row-index={idx}
+                          data-field-key="key"
+                          onChange={(e) => {
+                            onUpdateRow('queryParams', idx, 'key', e.target.value)
+                            handleInputHover(e, e.target.value)
+                            checkAutocompleteTrigger(e, e.target.value)
+                          }}
+                          onKeyDown={handleInputKeyDown}
+                          onMouseEnter={(e) => handleInputHover(e, row.key)}
+                          onMouseLeave={() => onSetTooltip({ show: false, text: '', x: 0, y: 0, isError: false })}
+                          placeholder="Key"
+                          className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500/40 font-mono caret-slate-200 text-transparent"
+                        />
+                        {row.key && (
+                          <div className="absolute inset-0 px-2 py-1.5 text-xs font-mono truncate pointer-events-none text-slate-200"
+                               dangerouslySetInnerHTML={{ __html: buildColoredText(row.key, activeEnvVars) }} />
+                        )}
+                      </div>
+                      <div className="flex-1 relative">
+                        <input
+                          type="text"
+                          value={row.value}
+                          data-field-type="queryParams"
+                          data-row-index={idx}
+                          data-field-key="value"
+                          onChange={(e) => {
+                            onUpdateRow('queryParams', idx, 'value', e.target.value)
+                            handleInputHover(e, e.target.value)
+                            checkAutocompleteTrigger(e, e.target.value)
+                          }}
+                          onKeyDown={handleInputKeyDown}
+                          onMouseEnter={(e) => handleInputHover(e, row.value)}
+                          onMouseLeave={() => onSetTooltip({ show: false, text: '', x: 0, y: 0, isError: false })}
+                          placeholder="Value"
+                          className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500/40 font-mono caret-slate-200 text-transparent"
+                        />
+                        {row.value && (
+                          <div className="absolute inset-0 px-2 py-1.5 text-xs font-mono truncate pointer-events-none text-slate-200"
+                               dangerouslySetInnerHTML={{ __html: buildColoredText(row.value, activeEnvVars) }} />
+                        )}
+                      </div>
                       <button
                         onClick={() => onDeleteRow('queryParams', idx)}
                         className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 text-sm transition"
@@ -1928,20 +1963,26 @@ function TabRequestPanel({
                           ))}
                         </datalist>
                       </div>
-                      <input
-                        type="text"
-                        value={row.value}
-                        onChange={(e) => {
-                          onUpdateRow('headers', idx, 'value', e.target.value)
-                          handleInputHover(e, e.target.value)
-                          checkAutocompleteTrigger(e, e.target.value)
-                        }}
-                        onKeyDown={handleInputKeyDown}
-                        onMouseEnter={(e) => handleInputHover(e, row.value)}
-                        onMouseLeave={() => onSetTooltip({ show: false, text: '', x: 0, y: 0, isError: false })}
-                        placeholder="e.g. application/json"
-                        className="flex-1 bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500/40 font-mono"
-                      />
+                      <div className="flex-1 relative">
+                        <input
+                          type="text"
+                          value={row.value}
+                          onChange={(e) => {
+                            onUpdateRow('headers', idx, 'value', e.target.value)
+                            handleInputHover(e, e.target.value)
+                            checkAutocompleteTrigger(e, e.target.value)
+                          }}
+                          onKeyDown={handleInputKeyDown}
+                          onMouseEnter={(e) => handleInputHover(e, row.value)}
+                          onMouseLeave={() => onSetTooltip({ show: false, text: '', x: 0, y: 0, isError: false })}
+                          placeholder="e.g. application/json"
+                          className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500/40 font-mono caret-slate-200 text-transparent"
+                        />
+                        {row.value && (
+                          <div className="absolute inset-0 px-2 py-1.5 text-xs font-mono truncate pointer-events-none text-slate-200"
+                               dangerouslySetInnerHTML={{ __html: buildColoredText(row.value, activeEnvVars) }} />
+                        )}
+                      </div>
                       <button
                         onClick={() => onDeleteRow('headers', idx)}
                         className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 text-sm transition"
@@ -2000,20 +2041,30 @@ function TabRequestPanel({
                       placeholder='{\n  "key": "value"\n}'
                     />
                   ) : (
-                    <textarea
-                      value={requestConfig.payload || ''}
-                      data-field-type="payload"
-                      onChange={(e) => {
-                        onUpdateConfig('payload', e.target.value)
-                        handleInputHover(e, e.target.value)
-                        checkAutocompleteTrigger(e, e.target.value)
-                      }}
-                      onKeyDown={handleInputKeyDown}
-                      onMouseEnter={(e) => handleInputHover(e, requestConfig.payload)}
-                      onMouseLeave={() => onSetTooltip({ show: false, text: '', x: 0, y: 0, isError: false })}
-                      placeholder="Raw text payload to send (POST/PUT)..."
-                      className="flex-grow w-full bg-slate-950 border border-white/10 rounded-lg p-3 text-xs text-slate-200 outline-none font-mono resize-none h-full overflow-y-auto focus:border-indigo-500/50"
-                    />
+                    <>
+                      <textarea
+                        value={requestConfig.payload || ''}
+                        data-field-type="payload"
+                        onChange={(e) => {
+                          onUpdateConfig('payload', e.target.value)
+                          handleInputHover(e, e.target.value)
+                          checkAutocompleteTrigger(e, e.target.value)
+                        }}
+                        onKeyDown={handleInputKeyDown}
+                        onMouseEnter={(e) => handleInputHover(e, requestConfig.payload)}
+                        onMouseLeave={() => onSetTooltip({ show: false, text: '', x: 0, y: 0, isError: false })}
+                        placeholder="Raw text payload to send (POST/PUT)..."
+                        className="flex-grow w-full bg-slate-950 border border-white/10 rounded-lg p-3 text-xs text-slate-200 outline-none font-mono resize-none h-full overflow-y-auto focus:border-indigo-500/50 caret-slate-200 text-transparent"
+                        onScroll={(e) => {
+                          const overlay = e.target.parentElement.querySelector('.env-overlay')
+                          if (overlay) overlay.scrollTop = e.target.scrollTop
+                        }}
+                      />
+                      {requestConfig.payload && (
+                        <div className="absolute inset-0 p-3 text-xs font-mono pointer-events-none text-slate-200 overflow-y-auto whitespace-pre-wrap env-overlay"
+                             dangerouslySetInnerHTML={{ __html: buildColoredText(requestConfig.payload, activeEnvVars) }} />
+                      )}
+                    </>
                   )}
                 </div>
               </div>

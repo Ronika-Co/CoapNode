@@ -70,6 +70,7 @@ const preScriptApi = [
   { label: 'request.payload', type: 'property', detail: 'string' },
   { label: 'request.method', type: 'property', detail: 'string' },
   { label: 'console.log', type: 'function', detail: '(...args) => void' },
+  { label: 'env', type: 'keyword', detail: 'object - active environment variables' },
 ]
 
 const postScriptApi = [
@@ -80,6 +81,7 @@ const postScriptApi = [
   { label: 'response.payload', type: 'property', detail: 'string' },
   { label: 'response.options', type: 'property', detail: 'Array' },
   { label: 'console.log', type: 'function', detail: '(...args) => void' },
+  { label: 'env', type: 'keyword', detail: 'object - active environment variables' },
 ]
 
 const mockRouteApi = [
@@ -90,18 +92,25 @@ const mockRouteApi = [
   { label: 'response.payload', type: 'property', detail: 'string' },
   { label: 'response.options', type: 'property', detail: 'Array' },
   { label: 'console.log', type: 'function', detail: '(...args) => void' },
+  { label: 'env', type: 'keyword', detail: 'object - active environment variables' },
 ]
 
-function createSandboxCompletions(apiList) {
+function createSandboxCompletions(apiList, envVarKeys = []) {
   return (context) => {
     let word = context.matchBefore(/\w*\.?\w*/)
     if (!word || (word.from === word.to && !context.explicit)) return null
 
     let text = context.state.sliceDoc(word.from, word.to)
 
+    // Generate dynamic env.<key> entries from active env vars
+    const envEntries = envVarKeys
+      .filter(k => k)
+      .map(k => ({ label: `env.${k}`, type: 'property', detail: 'string' }))
+    const allEntries = [...apiList, ...envEntries]
+
     if (text.includes('.')) {
       const [obj, partial] = text.split('.')
-      const members = apiList
+      const members = allEntries
         .filter(e => e.label.startsWith(obj + '.'))
         .map(e => ({ label: e.label.split('.')[1], type: e.type, detail: e.detail }))
         .filter(e => e.label.startsWith(partial))
@@ -111,7 +120,7 @@ function createSandboxCompletions(apiList) {
       }
     }
 
-    const objs = [...new Set(apiList.map(e => e.label.split('.')[0]))]
+    const objs = [...new Set(allEntries.map(e => e.label.split('.')[0]))]
     const matches = objs.filter(o => o.startsWith(text)).map(o => ({
       label: o, type: 'keyword', detail: 'sandbox object'
     }))
@@ -131,9 +140,11 @@ function createSandboxLinter(apiList) {
     const doc = view.state.doc.toString()
     const diagnostics = []
 
-    const memberRegex = /(\brequest\b|\bresponse\b|\bconsole\b)\.(\w+)/g
+    // env.* properties are dynamic and always valid; check request/response/console only
+    const memberRegex = /(\brequest\b|\bresponse\b|\bconsole\b|\benv\b)\.(\w+)/g
     let match
     while ((match = memberRegex.exec(doc)) !== null) {
+      if (match[1] === 'env') continue
       const fullName = `${match[1]}.${match[2]}`
       if (!validLabels.has(fullName)) {
         const avail = apiList
@@ -179,25 +190,31 @@ function createSandboxLinter(apiList) {
   }
 }
 
-// ---------- Pre-built extension sets ----------
+// ---------- Extension factories (accept envVarKeys for dynamic env.* autocomplete) ----------
 
-const preScriptExtensions = [
-  javascript(),
-  autocompletion({ override: [createSandboxCompletions(preScriptApi)] }),
-  linter(createSandboxLinter(preScriptApi)),
-]
+function createPreScriptExtensions(envVarKeys = []) {
+  return [
+    javascript(),
+    autocompletion({ override: [createSandboxCompletions(preScriptApi, envVarKeys)] }),
+    linter(createSandboxLinter(preScriptApi)),
+  ]
+}
 
-const postScriptExtensions = [
-  javascript(),
-  autocompletion({ override: [createSandboxCompletions(postScriptApi)] }),
-  linter(createSandboxLinter(postScriptApi)),
-]
+function createPostScriptExtensions(envVarKeys = []) {
+  return [
+    javascript(),
+    autocompletion({ override: [createSandboxCompletions(postScriptApi, envVarKeys)] }),
+    linter(createSandboxLinter(postScriptApi)),
+  ]
+}
 
-const mockRouteExtensions = [
-  javascript(),
-  autocompletion({ override: [createSandboxCompletions(mockRouteApi)] }),
-  linter(createSandboxLinter(mockRouteApi)),
-]
+function createMockRouteExtensions(envVarKeys = []) {
+  return [
+    javascript(),
+    autocompletion({ override: [createSandboxCompletions(mockRouteApi, envVarKeys)] }),
+    linter(createSandboxLinter(mockRouteApi)),
+  ]
+}
 
 const COAP_OPTIONS = [
   { num: 1, name: 'If-Match' },
@@ -387,6 +404,25 @@ export default function App() {
     if (!workspaceData || !workspaceData.activeEnvironmentId) return null
     return (workspaceData.environments || []).find(e => e.id === workspaceData.activeEnvironmentId)
   }
+
+  // Build plain env object from active env vars (for sandbox scripts)
+  const buildEnvObj = () => {
+    const activeEnv = getActiveEnvironment()
+    const envObj = {}
+    if (activeEnv) {
+      (activeEnv.variables || []).forEach(v => {
+        if (v.key) envObj[v.key] = v.value
+      })
+    }
+    return envObj
+  }
+
+  // Env variable keys for sandbox script autocomplete
+  const envVarKeys = React.useMemo(() => {
+    const activeEnv = getActiveEnvironment()
+    if (!activeEnv) return []
+    return (activeEnv.variables || []).map(v => v.key).filter(Boolean)
+  }, [workspaceData])
 
   // Regex string interpolation function
   const resolveVariables = (text) => {
@@ -834,6 +870,10 @@ export default function App() {
       ...workspaceData,
       activeEnvironmentId: envId
     })
+    // Update mock server env if running
+    if (isMockRunning) {
+      window.api.mockServer.updateEnv(buildEnvObj())
+    }
   }
 
   // Update variables within an environment
@@ -863,7 +903,8 @@ export default function App() {
       try {
         const port = workspaceData.mockPort || 5683
         const routes = workspaceData.mockRoutes || []
-        await window.api.mockServer.start(port, routes)
+        const env = buildEnvObj()
+        await window.api.mockServer.start(port, routes, env)
         setIsMockRunning(true)
       } catch (e) {
         updateTabState(activeTabId, { errorText: `Failed to start mock server: ${e.message}` })
@@ -1021,9 +1062,10 @@ export default function App() {
     updateTabState(activeTab.id, { response: null, scriptLogs: [], errorText: '', isRequesting: true })
 
     const resolvedConfig = interpolateRequestConfig(config)
+    const env = buildEnvObj()
 
     try {
-      const res = await window.api.coap.send({ ...resolvedConfig, bindToMockPort: activeTab.bindToMockPort })
+      const res = await window.api.coap.send({ ...resolvedConfig, bindToMockPort: activeTab.bindToMockPort, _env: env })
       const updates = { isRequesting: false }
       if (res.success) {
         updates.response = res.response
@@ -1060,10 +1102,11 @@ export default function App() {
     updateTabState(activeTab.id, { response: null, observeLogs: [], scriptLogs: [], errorText: '', isObserving: true, responseTab: 'observe' })
 
     const resolvedConfig = interpolateRequestConfig(config)
+    const env = buildEnvObj()
 
     const observingTabId = activeTab.id
     try {
-      const teardown = window.api.coap.observe({ ...resolvedConfig, bindToMockPort: activeTab.bindToMockPort }, (update) => {
+      const teardown = window.api.coap.observe({ ...resolvedConfig, bindToMockPort: activeTab.bindToMockPort, _env: env }, (update) => {
         const tab = getTabById(observingTabId)
         if (!tab) return
 
@@ -1489,6 +1532,7 @@ export default function App() {
                   <TabMockRoutePanel
                     tab={activeTab}
                     route={activeRoute}
+                    envVarKeys={envVarKeys}
                     onUpdateRoute={handleUpdateMockRoute}
                     onUpdateTabState={(updates) => updateTabState(activeTab.id, updates)}
                   />
@@ -1712,6 +1756,11 @@ function TabRequestPanel({
     const env = (workspaceData.environments || []).find(e => e.id === workspaceData.activeEnvironmentId)
     return env?.variables || []
   })()
+
+  const envVarKeys = React.useMemo(() => activeEnvVars.map(v => v.key).filter(Boolean), [activeEnvVars])
+
+  const preScriptExtensions = React.useMemo(() => createPreScriptExtensions(envVarKeys), [envVarKeys])
+  const postScriptExtensions = React.useMemo(() => createPostScriptExtensions(envVarKeys), [envVarKeys])
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -2100,10 +2149,11 @@ function TabRequestPanel({
                       <li>request.url (string)</li>
                       <li>request.payload (string)</li>
                       <li>request.method (string)</li>
+                      <li>env.&lt;variable&gt; (string)</li>
                     </ul>
                     <div className="h-px bg-white/5" />
                     <span className="font-semibold text-slate-200">Examples:</span>
-                    <code className="text-indigo-400 block whitespace-pre-wrap">request.payload = "Mutated text";&#10;console.log("Starting req...");</code>
+                    <code className="text-indigo-400 block whitespace-pre-wrap">request.payload = "Mutated text";&#10;console.log("Starting req...");&#10;console.log("Host: " + env.host);</code>
                   </div>
                 </div>
               </div>
@@ -2139,10 +2189,11 @@ function TabRequestPanel({
                       <li>response.code (string)</li>
                       <li>response.payload (string)</li>
                       <li>response.options (array)</li>
+                      <li>env.&lt;variable&gt; (string)</li>
                     </ul>
                     <div className="h-px bg-white/5" />
                     <span className="font-semibold text-slate-200">Examples:</span>
-                    <code className="text-indigo-400 block whitespace-pre-wrap">console.log("Body: " + response.payload);</code>
+                    <code className="text-indigo-400 block whitespace-pre-wrap">console.log("Body: " + response.payload);&#10;console.log("Host: " + env.host);</code>
                   </div>
                 </div>
               </div>
@@ -2590,8 +2641,10 @@ function TabMockConfigPanel({
 }
 
 // ----- MOCK ROUTE TAB PANEL -----
-function TabMockRoutePanel({ tab, route, onUpdateRoute, onUpdateTabState }) {
+function TabMockRoutePanel({ tab, route, envVarKeys = [], onUpdateRoute, onUpdateTabState }) {
   const [isResizingRequest, setIsResizingRequest] = useState(false)
+
+  const mockRouteExtensions = React.useMemo(() => createMockRouteExtensions(envVarKeys), [envVarKeys])
 
   const startResizeRequest = (e) => {
     e.preventDefault()
@@ -2696,6 +2749,10 @@ function TabMockRoutePanel({ tab, route, onUpdateRoute, onUpdateTabState }) {
                     <span className="text-slate-500 pl-2 block">- options: Array{"<{key, value}>"}</span>
                   </div>
                   <div>
+                    <span className="text-indigo-300 block">env</span>
+                    <span className="text-slate-500 pl-2 block">- &lt;variable&gt;: string</span>
+                  </div>
+                  <div>
                     <span className="text-indigo-300 block">console.log(...args)</span>
                     <span className="text-slate-500 pl-2 block">Logs to mock script log console</span>
                   </div>
@@ -2713,7 +2770,8 @@ response.options.push({
   key: 'Content-Format',
   value: '50'
 });
-console.log('Processed request: ' + request.payload);`}
+console.log('Processed request: ' + request.payload);
+console.log('Env host: ' + env.host);`}
                   </code>
                 </div>
               </div>

@@ -7,16 +7,19 @@ let runningPort = null
 let activeRoutes = []
 let sharedSocket = null
 let sharedAgent = null
+let activeEnv = {}
 
 export function getSharedAgent() {
   return sharedAgent
 }
 
-export function startMockServer(port, routes, webContents) {
+export function startMockServer(port, routes, webContents, env = {}) {
   return new Promise((resolve, reject) => {
     if (server) {
       return reject(new Error('Mock server is already running'))
     }
+
+    activeEnv = { ...env }
 
     try {
       sharedSocket = dgram.createSocket({ type: 'udp4', reuseAddr: true })
@@ -92,6 +95,10 @@ export function updateMockServerRoutes(routes) {
   activeRoutes = routes || []
 }
 
+export function updateMockServerEnv(env) {
+  activeEnv = { ...env }
+}
+
 function handleIncomingRequest(req, res, webContents) {
   const method = req.method
   const path = '/' + req.url.split('?')[0].replace(/^\//, '')
@@ -147,6 +154,7 @@ function handleIncomingRequest(req, res, webContents) {
         payload: 'Mock Response',
         options: []
       },
+      env: { ...activeEnv },
       console: {
         log: (...args) => {
           logs.push(args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' '))

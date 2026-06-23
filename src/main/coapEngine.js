@@ -44,8 +44,9 @@ function configureOptions(req, headers) {
 
 // Main execution logic for one-off requests (GET, POST, PUT, DELETE without observe)
 export async function sendCoapRequest(config) {
+  const env = config._env || {}
   // 1. Run pre-request script
-  const { requestConfig, logs: preLogs } = runPreScript(config.preScript, config)
+  const { requestConfig, logs: preLogs } = runPreScript(config.preScript, config, env)
 
   return new Promise((resolve) => {
     const startTime = Date.now()
@@ -110,7 +111,7 @@ export async function sendCoapRequest(config) {
           }
 
           // Run post-request script
-          const { logs: postLogs } = runPostScript(requestConfig.postScript, responseData, requestConfig)
+          const { logs: postLogs } = runPostScript(requestConfig.postScript, responseData, requestConfig, env)
 
           resolve({
             success: true,
@@ -148,8 +149,9 @@ export async function sendCoapRequest(config) {
 
 // Main execution logic for Observe subscriptions
 export function startObserveStream(config, subId, webContents) {
+  const env = config._env || {}
   // 1. Run pre-request script
-  const { requestConfig, logs: preLogs } = runPreScript(config.preScript, config)
+  const { requestConfig, logs: preLogs } = runPreScript(config.preScript, config, env)
 
   // Send initial pre-script logs to UI
   if (preLogs.length > 0) {
@@ -210,7 +212,7 @@ export function startObserveStream(config, subId, webContents) {
         }
 
         // Run post-request script on each stream message
-        const { logs: postLogs } = runPostScript(requestConfig.postScript, responseData, requestConfig)
+        const { logs: postLogs } = runPostScript(requestConfig.postScript, responseData, requestConfig, env)
 
         webContents.send('coap:observe-update', {
           subId,

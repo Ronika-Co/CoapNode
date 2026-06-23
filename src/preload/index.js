@@ -37,10 +37,11 @@ contextBridge.exposeInMainWorld('api', {
 
   // Mock Server API
   mockServer: {
-    start: (port, routes) => ipcRenderer.invoke('mock-server:start', { port, routes }),
+    start: (port, routes, env) => ipcRenderer.invoke('mock-server:start', { port, routes, env }),
     stop: () => ipcRenderer.invoke('mock-server:stop'),
     status: () => ipcRenderer.invoke('mock-server:status'),
     updateRoutes: (routes) => ipcRenderer.invoke('mock-server:update-routes', { routes }),
+    updateEnv: (env) => ipcRenderer.invoke('mock-server:update-env', { env }),
     onRequestReceived: (onReceive) => {
       const listener = (_event, arg) => onReceive(arg)
       ipcRenderer.on('mock-server:request-received', listener)

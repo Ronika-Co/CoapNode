@@ -1,6 +1,6 @@
 import vm from 'vm'
 
-export function runPreScript(scriptStr, requestConfig) {
+export function runPreScript(scriptStr, requestConfig, env = {}) {
   if (!scriptStr) return { requestConfig, logs: [] }
 
   const logs = []
@@ -12,6 +12,7 @@ export function runPreScript(scriptStr, requestConfig) {
       headers: JSON.parse(JSON.stringify(requestConfig.headers || [])),
       payload: requestConfig.payload || ''
     },
+    env: { ...env },
     console: {
       log: (...args) => {
         logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '))
@@ -38,7 +39,7 @@ export function runPreScript(scriptStr, requestConfig) {
   }
 }
 
-export function runPostScript(scriptStr, responseData, requestConfig) {
+export function runPostScript(scriptStr, responseData, requestConfig, env = {}) {
   if (!scriptStr) return { logs: [] }
 
   const logs = []
@@ -49,6 +50,7 @@ export function runPostScript(scriptStr, responseData, requestConfig) {
       payload: responseData.payload,
       options: JSON.parse(JSON.stringify(responseData.options || []))
     },
+    env: { ...env },
     console: {
       log: (...args) => {
         logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '))

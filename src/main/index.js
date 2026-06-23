@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog } from 'electron'
 import { join } from 'path'
 import { loadGlobalConfig, saveGlobalConfig, loadWorkspaceFromDir, saveWorkspaceToDir } from './storage.js'
 import { sendCoapRequest, startObserveStream, cancelRequest } from './coapEngine.js'
-import { startMockServer, stopMockServer, getMockServerStatus, updateMockServerRoutes } from './mockServer.js'
+import { startMockServer, stopMockServer, getMockServerStatus, updateMockServerRoutes, updateMockServerEnv } from './mockServer.js'
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
@@ -62,11 +62,15 @@ app.whenReady().then(() => {
   })
 
   // Mock Server IPC handlers
-  ipcMain.handle('mock-server:start', (event, { port, routes }) => startMockServer(port, routes, event.sender))
+  ipcMain.handle('mock-server:start', (event, { port, routes, env }) => startMockServer(port, routes, event.sender, env))
   ipcMain.handle('mock-server:stop', () => stopMockServer())
   ipcMain.handle('mock-server:status', () => getMockServerStatus())
   ipcMain.handle('mock-server:update-routes', (_event, { routes }) => {
     updateMockServerRoutes(routes)
+    return true
+  })
+  ipcMain.handle('mock-server:update-env', (_event, { env }) => {
+    updateMockServerEnv(env)
     return true
   })
 

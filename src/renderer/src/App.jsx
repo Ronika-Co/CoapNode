@@ -296,6 +296,10 @@ export default function App() {
   const [modalMode, setModalMode] = useState('create') // 'create' | 'rename'
   const [modalInitialValue, setModalInitialValue] = useState('')
 
+  // Env dropdown state
+  const [envDropdownOpen, setEnvDropdownOpen] = useState(false)
+  const envDropdownRef = useRef(null)
+
   // Variables Autocomplete state
   const [suggestion, setSuggestion] = useState({
     show: false,
@@ -401,6 +405,19 @@ export default function App() {
       window.removeEventListener('mouseup', handleMouseUp)
     }
   }, [isResizingSidebar])
+
+  // Click outside handler for env dropdown
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (envDropdownRef.current && !envDropdownRef.current.contains(e.target)) {
+        setEnvDropdownOpen(false)
+      }
+    }
+    if (envDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [envDropdownOpen])
 
   // Get current active environment variables
   const getActiveEnvironment = () => {
@@ -1347,6 +1364,48 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Active Environment Selector */}
+              <div className="px-4 py-2.5 border-b border-white/5 flex-shrink-0 flex items-center justify-between" ref={envDropdownRef}>
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Active Env</span>
+                <div className="relative">
+                  <button
+                    onClick={() => setEnvDropdownOpen(!envDropdownOpen)}
+                    className="flex items-center gap-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 transition min-w-0 max-w-[180px]"
+                  >
+                    <span className="truncate">🌱 {(() => {
+                      const active = workspaceData?.activeEnvironmentId
+                        ? (workspaceData.environments || []).find(e => e.id === workspaceData.activeEnvironmentId)
+                        : null
+                      return active ? active.name : 'No Environment'
+                    })()}</span>
+                    <span className="text-[9px] text-slate-500 flex-shrink-0">▼</span>
+                  </button>
+                  {envDropdownOpen && (
+                    <div className="absolute right-0 mt-1 w-full min-w-[160px] bg-slate-900 border border-white/10 rounded-xl shadow-2xl z-50 p-1">
+                      <div
+                        onClick={() => { handleSetActiveEnvironment(''); setEnvDropdownOpen(false) }}
+                        className="p-2 rounded-lg text-xs cursor-pointer hover:bg-white/5 text-slate-400 transition"
+                      >
+                        No Environment
+                      </div>
+                      {(workspaceData.environments || []).map(env => (
+                        <div
+                          key={env.id}
+                          onClick={() => { handleSetActiveEnvironment(env.id); setEnvDropdownOpen(false) }}
+                          className={`p-2 rounded-lg text-xs cursor-pointer hover:bg-white/5 transition flex items-center gap-2 ${
+                            workspaceData.activeEnvironmentId === env.id
+                              ? 'text-indigo-400 bg-indigo-500/10'
+                              : 'text-slate-200'
+                          }`}
+                        >
+                          🌱 {env.name}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Sidebar Tab Contents */}
               <div className="flex-1 overflow-y-auto p-4">
 
@@ -1564,7 +1623,6 @@ export default function App() {
                     onSend={handleSendRequest}
                     onToggleObserve={handleToggleObserve}
                     onCancel={handleCancelRequest}
-                    onSetActiveEnvironment={handleSetActiveEnvironment}
                     onSetTooltip={setTooltip}
                     onAddRow={handleAddRow}
                     onUpdateRow={handleUpdateRow}
@@ -1789,7 +1847,7 @@ function buildColoredText(text, variables) {
 function TabRequestPanel({
   tab, requestConfig, workspaceData, isMockRunning,
   onUpdateConfig, onUpdateTabState, onSend, onToggleObserve, onCancel,
-  onSetActiveEnvironment, onSetTooltip,
+  onSetTooltip,
   onAddRow, onUpdateRow, onDeleteRow,
   handleInputKeyDown, checkAutocompleteTrigger, handleInputHover,
 }) {
@@ -1827,6 +1885,9 @@ function TabRequestPanel({
       window.removeEventListener('mouseup', handleMouseUp)
     }
   }, [isResizingRequest])
+
+  const [optionsDropdownIdx, setOptionsDropdownIdx] = useState(-1)
+  const [optionsFilter, setOptionsFilter] = useState('')
 
   const COAP_OPTIONS_CONTEXT = [
     { num: 1, name: 'If-Match' },
@@ -1930,21 +1991,6 @@ function TabRequestPanel({
                  dangerouslySetInnerHTML={{ __html: buildColoredText(requestConfig.url, activeEnvVars) }} />
           )}
         </div>
-
-        {/* Active Environment Selector Dropdown */}
-        <select
-          value={workspaceData.activeEnvironmentId || ''}
-          onChange={(e) => onSetActiveEnvironment(e.target.value)}
-          className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-2 text-xs text-indigo-400 font-medium outline-none max-w-[150px] truncate"
-          title="Active Environment"
-        >
-          <option value="" className="bg-slate-900 text-slate-500">No Environment</option>
-          {(workspaceData.environments || []).map(env => (
-            <option key={env.id} value={env.id} className="bg-slate-900 text-slate-200">
-              🌱 {env.name}
-            </option>
-          ))}
-        </select>
 
         {/* Bind to Mock Port Toggle */}
         <div className="flex items-center gap-1.5 shrink-0">
@@ -2141,16 +2187,37 @@ function TabRequestPanel({
                         <input
                           type="text"
                           value={row.key}
-                          list="coap-option-names"
-                          onChange={(e) => onUpdateRow('headers', idx, 'key', e.target.value)}
+                          onChange={(e) => {
+                            onUpdateRow('headers', idx, 'key', e.target.value)
+                            setOptionsFilter(e.target.value)
+                            setOptionsDropdownIdx(idx)
+                          }}
+                          onFocus={() => { setOptionsFilter(row.key); setOptionsDropdownIdx(idx) }}
+                          onBlur={() => setTimeout(() => setOptionsDropdownIdx(-1), 150)}
                           placeholder="Select or type option..."
                           className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500/40 font-mono"
                         />
-                        <datalist id="coap-option-names">
-                          {COAP_OPTIONS_CONTEXT.map(opt => (
-                            <option key={opt.num} value={opt.name} />
-                          ))}
-                        </datalist>
+                        {optionsDropdownIdx === idx && (
+                          <div className="absolute left-0 right-0 mt-1 bg-slate-900 border border-white/10 rounded-xl shadow-2xl z-50 max-h-48 overflow-y-auto p-1">
+                            {COAP_OPTIONS_CONTEXT.filter(opt =>
+                              !optionsFilter || opt.name.toLowerCase().includes(optionsFilter.toLowerCase())
+                            ).map(opt => (
+                              <div
+                                key={opt.num}
+                                onMouseDown={() => { onUpdateRow('headers', idx, 'key', opt.name); setOptionsDropdownIdx(-1) }}
+                                className="px-2.5 py-1.5 rounded-lg text-xs cursor-pointer hover:bg-white/5 text-slate-200 transition flex items-center justify-between"
+                              >
+                                <span>{opt.name}</span>
+                                <span className="text-[10px] text-slate-500">#{opt.num}</span>
+                              </div>
+                            ))}
+                            {COAP_OPTIONS_CONTEXT.filter(opt =>
+                              !optionsFilter || opt.name.toLowerCase().includes(optionsFilter.toLowerCase())
+                            ).length === 0 && (
+                              <div className="px-2.5 py-1.5 text-xs text-slate-500 italic">No matching options</div>
+                            )}
+                          </div>
+                        )}
                       </div>
                       <div className="flex-1 relative overflow-hidden">
                         <input

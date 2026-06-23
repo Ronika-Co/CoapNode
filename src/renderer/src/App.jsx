@@ -1781,7 +1781,7 @@ function buildColoredText(text, variables) {
     const varName = key.trim()
     const found = (variables || []).find(v => v.key === varName)
     const color = found ? 'text-amber-400' : 'text-rose-400'
-    return `<span class="${color} font-semibold">${match}</span>`
+    return `<span class="${color}">${match}</span>`
   })
 }
 
@@ -1905,7 +1905,7 @@ function TabRequestPanel({
           <option value="DELETE" className="bg-slate-900 text-rose-400">DELETE</option>
         </select>
 
-        <div className="flex-1 relative">
+        <div className="flex-1 relative overflow-hidden">
           <input
             type="text"
             value={requestConfig.url}
@@ -1920,9 +1920,13 @@ function TabRequestPanel({
             onMouseLeave={() => onSetTooltip({ show: false, text: '', x: 0, y: 0, isError: false })}
             placeholder="coap://{{host}}:5683/resource"
             className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-slate-100 outline-none focus:border-indigo-500/50 caret-slate-100 text-transparent"
+            onScroll={(e) => {
+              const overlay = e.target.parentElement.querySelector('.env-overlay-h')
+              if (overlay) overlay.scrollLeft = e.target.scrollLeft
+            }}
           />
           {requestConfig.url && (
-            <div className="absolute inset-0 px-3 py-2 text-sm font-sans truncate pointer-events-none text-slate-100"
+            <div className="absolute inset-0 px-3 py-2 text-sm font-sans overflow-x-auto whitespace-nowrap pointer-events-none text-slate-100 env-overlay-h scrollbar-none"
                  dangerouslySetInnerHTML={{ __html: buildColoredText(requestConfig.url, activeEnvVars) }} />
           )}
         </div>
@@ -2046,7 +2050,7 @@ function TabRequestPanel({
                 <div className="space-y-2">
                   {requestConfig.queryParams?.map((row, idx) => (
                     <div key={idx} className="flex gap-2 items-center">
-                      <div className="flex-1 relative">
+                      <div className="flex-1 relative overflow-hidden">
                         <input
                           type="text"
                           value={row.key}
@@ -2063,13 +2067,17 @@ function TabRequestPanel({
                           onMouseLeave={() => onSetTooltip({ show: false, text: '', x: 0, y: 0, isError: false })}
                           placeholder="Key"
                           className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500/40 font-mono caret-slate-200 text-transparent"
+                          onScroll={(e) => {
+                            const overlay = e.target.parentElement.querySelector('.env-overlay-h')
+                            if (overlay) overlay.scrollLeft = e.target.scrollLeft
+                          }}
                         />
                         {row.key && (
-                          <div className="absolute inset-0 px-2 py-1.5 text-xs font-mono truncate pointer-events-none text-slate-200"
+                          <div className="absolute inset-0 px-2 py-1.5 text-xs font-mono overflow-x-auto whitespace-nowrap pointer-events-none text-slate-200 env-overlay-h scrollbar-none"
                                dangerouslySetInnerHTML={{ __html: buildColoredText(row.key, activeEnvVars) }} />
                         )}
                       </div>
-                      <div className="flex-1 relative">
+                      <div className="flex-1 relative overflow-hidden">
                         <input
                           type="text"
                           value={row.value}
@@ -2086,9 +2094,13 @@ function TabRequestPanel({
                           onMouseLeave={() => onSetTooltip({ show: false, text: '', x: 0, y: 0, isError: false })}
                           placeholder="Value"
                           className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500/40 font-mono caret-slate-200 text-transparent"
+                          onScroll={(e) => {
+                            const overlay = e.target.parentElement.querySelector('.env-overlay-h')
+                            if (overlay) overlay.scrollLeft = e.target.scrollLeft
+                          }}
                         />
                         {row.value && (
-                          <div className="absolute inset-0 px-2 py-1.5 text-xs font-mono truncate pointer-events-none text-slate-200"
+                          <div className="absolute inset-0 px-2 py-1.5 text-xs font-mono overflow-x-auto whitespace-nowrap pointer-events-none text-slate-200 env-overlay-h scrollbar-none"
                                dangerouslySetInnerHTML={{ __html: buildColoredText(row.value, activeEnvVars) }} />
                         )}
                       </div>
@@ -2140,7 +2152,7 @@ function TabRequestPanel({
                           ))}
                         </datalist>
                       </div>
-                      <div className="flex-1 relative">
+                      <div className="flex-1 relative overflow-hidden">
                         <input
                           type="text"
                           value={row.value}
@@ -2154,9 +2166,13 @@ function TabRequestPanel({
                           onMouseLeave={() => onSetTooltip({ show: false, text: '', x: 0, y: 0, isError: false })}
                           placeholder="e.g. application/json"
                           className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500/40 font-mono caret-slate-200 text-transparent"
+                          onScroll={(e) => {
+                            const overlay = e.target.parentElement.querySelector('.env-overlay-h')
+                            if (overlay) overlay.scrollLeft = e.target.scrollLeft
+                          }}
                         />
                         {row.value && (
-                          <div className="absolute inset-0 px-2 py-1.5 text-xs font-mono truncate pointer-events-none text-slate-200"
+                          <div className="absolute inset-0 px-2 py-1.5 text-xs font-mono overflow-x-auto whitespace-nowrap pointer-events-none text-slate-200 env-overlay-h scrollbar-none"
                                dangerouslySetInnerHTML={{ __html: buildColoredText(row.value, activeEnvVars) }} />
                         )}
                       </div>

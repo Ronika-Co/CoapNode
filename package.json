@@ -1,6 +1,6 @@
 {
   "name": "coap-node-electron",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Electron + React + Tailwind CSS Desktop application",
   "main": "./out/main/index.js",
   "scripts": {

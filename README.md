@@ -1,4 +1,4 @@
-# CoapNode
+# CoapNode - [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Ronika-Co/CoapNode)
 
 CoapNode is an advanced desktop client for the CoAP (Constrained Application Protocol), built with Electron, React, and Tailwind CSS. It provides a modern interface to construct and send CoAP requests, manage workspaces, environments, and mock servers.
 

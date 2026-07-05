@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CoapNode - Advanced Desktop Client for CoAP</title>
+    <meta name="description" content="An advanced desktop client for the Constrained Application Protocol (CoAP), built with Electron.">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .bg-grid {
+            background-size: 40px 40px;
+            background-image: linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+                              linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col">
+
+    <!-- Navigation -->
+    <nav class="container mx-auto px-6 py-4 flex justify-between items-center relative z-10">
+        <div class="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">
+            CoapNode
+        </div>
+        <div class="space-x-6">
+            <a href="https://github.com/Ronika-Co/CoapNode" class="text-gray-300 hover:text-white transition">GitHub</a>
+            <a href="https://github.com/Ronika-Co/CoapNode/releases" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-medium transition shadow-lg">Releases</a>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <header class="relative container mx-auto px-6 pt-20 pb-24 text-center z-10 flex-grow">
+        <div class="absolute inset-0 bg-grid opacity-50 z-0"></div>
+        <div class="relative z-10 max-w-3xl mx-auto">
+            <h1 class="text-5xl md:text-6xl font-extrabold mb-6 leading-tight">
+                The Advanced Desktop Client for <span class="text-emerald-400">CoAP</span>
+            </h1>
+            <p class="text-xl text-gray-400 mb-10">
+                Construct and send CoAP requests, manage workspaces, environments, and run scriptable mock servers. Built for modern IoT developers using Electron and React.
+            </p>
+            <div class="flex flex-col sm:flex-row justify-center gap-4">
+                <a href="https://github.com/Ronika-Co/CoapNode/releases/latest" class="bg-emerald-500 hover:bg-emerald-400 text-gray-900 px-8 py-3 rounded-lg font-bold text-lg transition shadow-lg shadow-emerald-500/30 flex items-center justify-center">
+                    <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a1 1 0 011 1v10.586l2.293-2.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 13.586V3a1 1 0 011-1z"></path><path d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"></path></svg>
+                    Download AppImage (Linux)
+                </a>
+                <a href="https://github.com/Ronika-Co/CoapNode/releases/latest" class="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-lg font-bold text-lg transition shadow-lg shadow-blue-500/30 flex items-center justify-center">
+                    <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a1 1 0 011 1v10.586l2.293-2.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 13.586V3a1 1 0 011-1z"></path><path d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"></path></svg>
+                    Download .exe (Windows)
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Features Section -->
+    <section class="bg-gray-800 py-20 relative z-10 border-t border-gray-700 border-b">
+        <div class="container mx-auto px-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                <!-- Feature 1 -->
+                <div class="bg-gray-900 p-6 rounded-xl border border-gray-700 hover:border-emerald-500 transition">
+                    <div class="bg-gray-800 w-12 h-12 rounded-lg flex items-center justify-center mb-4 text-emerald-400 text-xl font-bold">1</div>
+                    <h3 class="text-xl font-bold mb-2">CoAP Client</h3>
+                    <p class="text-gray-400">Construct, send, and deeply analyze CoAP requests and responses with a clean UI.</p>
+                </div>
+                <!-- Feature 2 -->
+                <div class="bg-gray-900 p-6 rounded-xl border border-gray-700 hover:border-blue-500 transition">
+                    <div class="bg-gray-800 w-12 h-12 rounded-lg flex items-center justify-center mb-4 text-blue-400 text-xl font-bold">2</div>
+                    <h3 class="text-xl font-bold mb-2">Workspaces</h3>
+                    <p class="text-gray-400">Keep your projects clean by organizing your requests into distinct workspaces and collections.</p>
+                </div>
+                <!-- Feature 3 -->
+                <div class="bg-gray-900 p-6 rounded-xl border border-gray-700 hover:border-purple-500 transition">
+                    <div class="bg-gray-800 w-12 h-12 rounded-lg flex items-center justify-center mb-4 text-purple-400 text-xl font-bold">3</div>
+                    <h3 class="text-xl font-bold mb-2">Environments</h3>
+                    <p class="text-gray-400">Seamlessly switch between environments. Use dynamic variables in your paths and payloads.</p>
+                </div>
+                <!-- Feature 4 -->
+                <div class="bg-gray-900 p-6 rounded-xl border border-gray-700 hover:border-orange-500 transition">
+                    <div class="bg-gray-800 w-12 h-12 rounded-lg flex items-center justify-center mb-4 text-orange-400 text-xl font-bold">4</div>
+                    <h3 class="text-xl font-bold mb-2">Mock Server</h3>
+                    <p class="text-gray-400">Built-in CoAP mock server featuring a rich code editor for custom routes and sandboxed scripting.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Quick Start -->
+    <section class="container mx-auto px-6 py-20 relative z-10">
+        <div class="max-w-4xl mx-auto">
+            <h2 class="text-3xl font-bold mb-8 text-center">Run From Source</h2>
+            <div class="bg-gray-950 rounded-lg p-6 border border-gray-800 shadow-2xl">
+                <div class="flex items-center mb-4 space-x-2">
+                    <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                    <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                    <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                    <span class="text-gray-500 text-sm ml-2 font-mono">bash</span>
+                </div>
+                <pre class="text-gray-300 font-mono text-sm overflow-x-auto"><code><span class="text-blue-400"># Clone the repository</span>
+git clone https://github.com/Ronika-Co/CoapNode
+<span class="text-yellow-300">cd</span> CoapNode
+
+<span class="text-blue-400"># Install dependencies</span>
+npm install
+
+<span class="text-blue-400"># Run the development server</span>
+npm run dev
+
+<span class="text-blue-400"># Or build for your OS</span>
+npm run build</code></pre>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 border-t border-gray-800 py-8 text-center text-gray-500 relative z-10">
+        <p>© 2026 Ronika-Co. Open source under the MIT License.</p>
+    </footer>
+
+</body>
+</html>

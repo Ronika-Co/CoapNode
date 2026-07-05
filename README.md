@@ -2,6 +2,9 @@
 
 CoapNode is an advanced desktop client for the CoAP (Constrained Application Protocol), built with Electron, React, and Tailwind CSS. It provides a modern interface to construct and send CoAP requests, manage workspaces, environments, and mock servers.
 
+<img width="1920" height="1034" alt="CoapNode" src="https://github.com/user-attachments/assets/775e71c5-ecf6-4d5b-a570-4f6357997fa1" />
+
+
 ## Features
 
 - **CoAP Client**: Construct, send, and analyze CoAP requests and responses.

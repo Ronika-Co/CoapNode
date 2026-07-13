@@ -5,11 +5,13 @@ import { sendCoapRequest, startObserveStream, cancelRequest } from './coapEngine
 import { startMockServer, stopMockServer, getMockServerStatus, updateMockServerRoutes, updateMockServerEnv } from './mockServer.js'
 
 function createWindow() {
+  const iconPath = join(__dirname, '../../build/icon.png')
   const mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     show: false,
     autoHideMenuBar: true,
+    icon: iconPath,
     webPreferences: {
       preload: join(__dirname, '../preload/index.cjs'),
       contextIsolation: true,

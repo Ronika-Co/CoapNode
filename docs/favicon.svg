@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Background -->
+  <rect width="100" height="100" rx="22" fill="#0f172a"/>
+
+  <!-- Center glow -->
+  <circle cx="50" cy="50" r="14" fill="#6366f1" opacity="0.10"/>
+
+  <!-- Track -->
+  <circle
+    cx="50"
+    cy="50"
+    r="33"
+    fill="none"
+    stroke="#1e293b"
+    stroke-width="7"/>
+
+  <!-- Blue arc -->
+  <path
+    d="M50 17 A33 33 0 0 1 83 50"
+    fill="none"
+    stroke="#6366f1"
+    stroke-width="6"
+    stroke-linecap="round"/>
+
+  <!-- Blue arrow -->
+  <polygon
+    points="0,-4 10,0 0,4"
+    fill="#6366f1"
+    transform="translate(83 50) rotate(90)"/>
+
+  <!-- Purple arc -->
+  <path 
+    d="M 50 83 A 33 33 0 0 1 17 50" 
+    fill="none" 
+    stroke="#a855f7" 
+    stroke-width="6" 
+    stroke-linecap="round"/>
+
+  <!-- Purple arrow -->
+  <polygon
+    points="0,-4 10,0 0,4"
+    fill="#a855f7"
+    transform="translate(17 50) rotate(270)"/>
+
+  <!-- Center -->
+  <circle cx="50" cy="50" r="8" fill="#818cf8"/>
+  <circle cx="50" cy="50" r="3" fill="#0f172a"/>
+</svg>

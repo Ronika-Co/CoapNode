@@ -7,6 +7,7 @@ import { linter } from '@codemirror/lint'
 import { json, jsonParseLinter } from '@codemirror/lang-json'
 import TabBar from './components/TabBar'
 import { useTabs } from './contexts/TabContext'
+import iconUrl from '../../../docs/favicon.svg'
 
 // Custom Dialog/Modal Component to replace window.prompt()
 function InputModal({ isOpen, onClose, onSubmit, title, placeholder, initialValue = '' }) {
@@ -1710,8 +1711,8 @@ export default function App() {
             ) : (
               // NO ACTIVE TAB
               <div className="flex-grow flex flex-col items-center justify-center text-center p-6 bg-slate-900/10">
-                <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center text-3xl font-bold mb-4 shadow-lg shadow-indigo-500/5">
-                  C
+                <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mb-4 shadow-lg shadow-indigo-500/5">
+                  <img src={iconUrl} alt="CoapNode" className="w-12 h-12" />
                 </div>
                 <h2 className="text-2xl font-bold tracking-tight mb-2">No Active Tab</h2>
                 <p className="text-slate-400 text-sm max-w-sm">
@@ -1732,9 +1733,7 @@ export default function App() {
 
             {/* Header */}
             <div className="flex flex-col items-center gap-2">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center font-bold text-xl shadow-lg shadow-indigo-500/30">
-                C
-              </div>
+              <img src={iconUrl} alt="CoapNode" className="w-12 h-12" />
               <h2 className="text-xl font-bold text-slate-100 tracking-wide mt-2">CoapNode Workspace Manager</h2>
               <p className="text-slate-400 text-xs mt-1 leading-relaxed">
                 Select a local directory to manage your collections. The configuration will be stored as <code className="text-indigo-300">coap-workspace.json</code> inside the directory.
